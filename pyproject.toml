@@ -23,9 +23,13 @@ gui = [
 [project.scripts]
 kitta = "kitta.cli.main:main"
 
+[project.gui-scripts]
+kitta-gui = "kitta.gui.app:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",
+    "pytest-qt>=4.4",
     "ruff>=0.6",
 ]
 
