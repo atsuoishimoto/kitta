@@ -7,10 +7,12 @@ comparison begins only when Start is pressed.
 
 from __future__ import annotations
 
+import itertools
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -23,6 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from kitta.core import paths
 from kitta.core.models import DEFAULT_PRESET_NAMES, PRESETS, Preset
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
@@ -41,6 +44,43 @@ def dropped_image_path(event) -> str | None:
         if url.isLocalFile() and is_supported_image(url.toLocalFile()):
             return url.toLocalFile()
     return None
+
+
+def accepts_drop(event) -> bool:
+    """A drop is usable if it carries a supported file or raw image data."""
+    return dropped_image_path(event) is not None or event.mimeData().hasImage()
+
+
+def extract_dropped_image_path(event) -> str | None:
+    """Resolve a drop to a local file path.
+
+    A local file wins; otherwise raw image data (e.g. an image dragged
+    out of a browser) is materialized as a PNG in the cache so the rest
+    of the path-based flow works unchanged.
+    """
+    path = dropped_image_path(event)
+    if path is not None:
+        return path
+    mime = event.mimeData()
+    if mime.hasImage():
+        image = QImage(mime.imageData())
+        if not image.isNull():
+            return _save_dropped_image(image)
+    return None
+
+
+def _save_dropped_image(image: QImage) -> str | None:
+    directory = paths.cache_dir() / "dropped"
+    directory.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    for counter in itertools.count():
+        suffix = "" if counter == 0 else f"-{counter}"
+        path = directory / f"dropped-{stamp}{suffix}.png"
+        if not path.exists():
+            break
+    if not image.save(str(path), "PNG"):
+        return None
+    return str(path)
 
 
 class DropView(QWidget):
@@ -168,11 +208,11 @@ class DropView(QWidget):
             self.set_image(path)
 
     def dragEnterEvent(self, event) -> None:
-        if dropped_image_path(event) is not None:
+        if accepts_drop(event):
             event.acceptProposedAction()
 
     def dropEvent(self, event) -> None:
-        path = dropped_image_path(event)
+        path = extract_dropped_image_path(event)
         if path is not None:
             event.acceptProposedAction()
             self.set_image(path)

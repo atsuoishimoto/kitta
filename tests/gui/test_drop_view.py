@@ -79,3 +79,84 @@ def test_is_supported_image():
     assert is_supported_image("/tmp/x/photo.webp")
     assert not is_supported_image("notes.txt")
     assert not is_supported_image("archive.zip")
+
+
+class FakeDropEvent:
+    def __init__(self, mime):
+        self._mime = mime
+        self.accepted = False
+
+    def mimeData(self):
+        return self._mime
+
+    def acceptProposedAction(self):
+        self.accepted = True
+
+
+def make_image_mime():
+    from PySide6.QtCore import QMimeData
+    from PySide6.QtGui import QImage
+
+    image = QImage(16, 12, QImage.Format_RGB32)
+    image.fill(0xFF3060A0)
+    mime = QMimeData()
+    mime.setImageData(image)
+    return mime
+
+
+def make_file_mime(path):
+    from PySide6.QtCore import QMimeData, QUrl
+
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(path))])
+    return mime
+
+
+def test_accepts_drop(qtbot, image_file):
+    from kitta.gui.drop_view import accepts_drop
+
+    assert accepts_drop(FakeDropEvent(make_file_mime(image_file)))
+    assert accepts_drop(FakeDropEvent(make_image_mime()))
+    from PySide6.QtCore import QMimeData
+
+    empty = QMimeData()
+    empty.setText("hello")
+    assert not accepts_drop(FakeDropEvent(empty))
+
+
+def test_extract_prefers_local_file(qtbot, image_file):
+    from kitta.gui.drop_view import extract_dropped_image_path
+
+    mime = make_file_mime(image_file)
+    mime.setImageData(make_image_mime().imageData())
+    assert extract_dropped_image_path(FakeDropEvent(mime)) == str(image_file)
+
+
+def test_image_data_drop_is_materialized(qtbot, tmp_path, monkeypatch):
+    from kitta.core import paths
+    from kitta.gui.drop_view import extract_dropped_image_path
+
+    monkeypatch.setattr(paths, "cache_dir", lambda: tmp_path)
+
+    path = extract_dropped_image_path(FakeDropEvent(make_image_mime()))
+
+    assert path is not None
+    assert path.startswith(str(tmp_path / "dropped"))
+    assert Image.open(path).size == (16, 12)
+
+    # a second drop in the same second must not overwrite the first
+    other = extract_dropped_image_path(FakeDropEvent(make_image_mime()))
+    assert other != path
+
+
+def test_drop_event_with_image_data_shows_preview(view, tmp_path, monkeypatch):
+    from kitta.core import paths
+
+    monkeypatch.setattr(paths, "cache_dir", lambda: tmp_path)
+    event = FakeDropEvent(make_image_mime())
+
+    view.dropEvent(event)
+
+    assert event.accepted
+    assert view.selected_path() is not None
+    assert view._center_stack.currentIndex() == 1

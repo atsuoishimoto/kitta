@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from kitta.gui.drop_view import dropped_image_path
+from kitta.gui.drop_view import accepts_drop, extract_dropped_image_path
 from kitta.gui.image_view import Background, ImageView, ViewSynchronizer
 
 GRID_COLUMNS = 3
@@ -332,11 +332,11 @@ class CompareView(QWidget):
     # --- drag & drop of a new image ---------------------------------------
 
     def dragEnterEvent(self, event) -> None:
-        if dropped_image_path(event) is not None:
+        if accepts_drop(event):
             event.acceptProposedAction()
 
     def dropEvent(self, event) -> None:
-        path = dropped_image_path(event)
+        path = extract_dropped_image_path(event)
         if path is not None:
             event.acceptProposedAction()
             self.image_dropped.emit(path)
