@@ -60,6 +60,8 @@ class ResultCell(QFrame):
         self._displayed: ViewMode = ViewMode.ORIGINAL
 
         self.setFrameShape(QFrame.Shape.StyledPanel)
+        # clicking a cell selects it; the image view keeps its pan cursor
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self.title_label = QLabel()
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -196,6 +198,15 @@ class CompareView(QWidget):
         self._save_mask_button = QPushButton(self.tr("Save Mask"))
         self._save_mask_button.setEnabled(False)
         self._save_mask_button.clicked.connect(self.save_mask)
+
+        for button in (
+            self._back_button,
+            *self._mode_buttons.values(),
+            *self._background_buttons.values(),
+            self._save_png_button,
+            self._save_mask_button,
+        ):
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
 
         toolbar = QHBoxLayout()
         toolbar.addWidget(self._back_button)

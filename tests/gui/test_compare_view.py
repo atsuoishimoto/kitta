@@ -34,6 +34,20 @@ def test_pil_to_qimage(sample_image):
     assert (qimage.width(), qimage.height()) == sample_image.size
 
 
+def test_clickables_use_pointing_hand_cursor(view):
+    from PySide6.QtCore import Qt
+
+    hand = Qt.CursorShape.PointingHandCursor
+    assert view._back_button.cursor().shape() == hand
+    assert view._save_png_button.cursor().shape() == hand
+    assert all(b.cursor().shape() == hand for b in view._mode_buttons.values())
+    assert all(b.cursor().shape() == hand for b in view._background_buttons.values())
+    for cell in view.cells:
+        assert cell.cursor().shape() == hand
+        # the image area keeps its pan (open hand) cursor
+        assert cell.view.viewport().cursor().shape() == Qt.CursorShape.OpenHandCursor
+
+
 def test_begin_creates_cells_showing_original(view):
     assert len(view.cells) == 2
     assert view.view_mode() is ViewMode.RESULT

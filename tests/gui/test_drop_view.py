@@ -35,6 +35,12 @@ def test_all_presets_offered(view):
     assert [preset.name for preset in view.selected_presets()] == list(PRESETS)
 
 
+def test_clickable_area_uses_pointing_hand_cursor(view):
+    from PySide6.QtCore import Qt
+
+    assert view.cursor().shape() == Qt.CursorShape.PointingHandCursor
+
+
 def test_initially_no_image_selected(view):
     assert view.selected_path() is None
     assert view._center_stack.currentIndex() == 0  # drop label page

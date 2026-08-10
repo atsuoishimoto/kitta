@@ -136,6 +136,8 @@ class DropView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
+        # the whole view is clickable (opens the file dialog)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._selected_path: str | None = None
         self._preview_pixmap: QPixmap | None = None
 
