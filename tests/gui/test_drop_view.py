@@ -305,11 +305,14 @@ def test_accepts_drop(qtbot, image_file):
 
 
 def test_extract_prefers_local_file(qtbot, image_file):
+    from pathlib import Path
+
     from kitta.gui.drop_view import extract_dropped_image_path
 
     mime = make_file_mime(image_file)
     mime.setImageData(make_image_mime().imageData())
-    assert extract_dropped_image_path(FakeDropEvent(mime)) == str(image_file)
+    # QUrl.toLocalFile() uses forward slashes on Windows; compare as paths
+    assert Path(extract_dropped_image_path(FakeDropEvent(mime))) == image_file
 
 
 def test_image_data_drop_is_materialized(qtbot, tmp_path, monkeypatch):
