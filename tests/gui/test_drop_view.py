@@ -178,9 +178,30 @@ def test_paste_button_tracks_clipboard(view, qtbot, qapp):
     image.fill(0xFF000000)
     qapp.clipboard().setImage(image)
     qtbot.waitUntil(view._paste_button.isEnabled, timeout=2000)
+    assert view._preview_paste_button.isEnabled()  # preview-page button stays in sync
 
     qapp.clipboard().clear()
     qtbot.waitUntil(lambda: not view._paste_button.isEnabled(), timeout=2000)
+    assert not view._preview_paste_button.isEnabled()
+
+
+def test_preview_page_can_paste_replacement(view, tmp_path, monkeypatch, qapp, image_file):
+    from PySide6.QtGui import QImage
+
+    from kitta.core import paths
+
+    monkeypatch.setattr(paths, "cache_dir", lambda: tmp_path)
+    view.set_image(str(image_file))
+    first = view.selected_path()
+
+    image = QImage(12, 8, QImage.Format_RGB32)
+    image.fill(0xFF3060A0)
+    qapp.clipboard().setImage(image)
+
+    view._preview_paste_button.click()
+
+    assert view.selected_path() != first
+    assert Image.open(view.selected_path()).size == (12, 8)
 
 
 def test_paste_without_image_shows_info(view, monkeypatch, qapp):

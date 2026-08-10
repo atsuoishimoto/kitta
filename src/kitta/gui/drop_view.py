@@ -251,12 +251,7 @@ class DropView(QWidget):
         # page shown while no image is selected
         self._drop_label = DropZoneLabel(self.tr("Drop an image here\nor click to choose a file"))
         self._drop_label.clicked.connect(self._open_file_dialog)
-        paste_key = QKeySequence(QKeySequence.StandardKey.Paste).toString(
-            QKeySequence.SequenceFormat.NativeText
-        )
-        self._paste_button = QPushButton(self.tr("Paste Image ({0})").format(paste_key))
-        self._paste_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._paste_button.clicked.connect(self.paste_from_clipboard)
+        self._paste_button = self._make_paste_button()
         drop_page = QWidget()
         drop_layout = QVBoxLayout(drop_page)
         drop_layout.setContentsMargins(48, 24, 48, 24)
@@ -267,9 +262,6 @@ class DropView(QWidget):
         self._paste_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Paste), self)
         self._paste_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
         self._paste_shortcut.activated.connect(self._on_paste_shortcut)
-
-        QApplication.clipboard().dataChanged.connect(self._update_paste_button)
-        self._update_paste_button()
 
         # page shown once an image is selected
         self._preview_area = PreviewArea()
@@ -282,10 +274,12 @@ class DropView(QWidget):
         self._start_button.setDefault(True)
         self._start_button.clicked.connect(self._on_start_clicked)
 
+        self._preview_paste_button = self._make_paste_button()
         preview_page = QWidget()
         preview_layout = QVBoxLayout(preview_page)
         preview_layout.addWidget(self._preview_area, stretch=1)
         preview_layout.addWidget(self._filename_label)
+        preview_layout.addWidget(self._preview_paste_button, alignment=Qt.AlignmentFlag.AlignCenter)
         preview_layout.addWidget(self._start_button, alignment=Qt.AlignmentFlag.AlignCenter)
 
         self._center_stack = QStackedWidget()
@@ -313,6 +307,9 @@ class DropView(QWidget):
         layout.addWidget(self._center_stack, stretch=1)
         layout.addWidget(self._models_label)
         layout.addLayout(presets_row)
+
+        QApplication.clipboard().dataChanged.connect(self._update_paste_button)
+        self._update_paste_button()
 
     # --- selection state --------------------------------------------------
 
@@ -354,9 +351,20 @@ class DropView(QWidget):
             return
         self.set_image(path)
 
+    def _make_paste_button(self) -> QPushButton:
+        paste_key = QKeySequence(QKeySequence.StandardKey.Paste).toString(
+            QKeySequence.SequenceFormat.NativeText
+        )
+        button = QPushButton(self.tr("Paste Image ({0})").format(paste_key))
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(self.paste_from_clipboard)
+        return button
+
     def _update_paste_button(self) -> None:
         mime = QApplication.clipboard().mimeData()
-        self._paste_button.setEnabled(mime is not None and mime_has_image(mime))
+        enabled = mime is not None and mime_has_image(mime)
+        self._paste_button.setEnabled(enabled)
+        self._preview_paste_button.setEnabled(enabled)
 
     def _on_paste_shortcut(self) -> None:
         # window-scoped shortcut: act only while the drop screen is shown
