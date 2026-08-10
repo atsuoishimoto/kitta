@@ -35,10 +35,92 @@ def test_all_presets_offered(view):
     assert [preset.name for preset in view.selected_presets()] == list(PRESETS)
 
 
-def test_clickable_area_uses_pointing_hand_cursor(view):
+def test_only_drop_zone_is_click_target(view):
     from PySide6.QtCore import Qt
 
-    assert view.cursor().shape() == Qt.CursorShape.PointingHandCursor
+    assert view._drop_label.cursor().shape() == Qt.CursorShape.PointingHandCursor
+    assert view.cursor().shape() == Qt.CursorShape.ArrowCursor
+
+
+def test_drop_zone_click_opens_file_dialog(view, image_file, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    monkeypatch.setattr(
+        QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: ("", "")), raising=False
+    )
+    monkeypatch.setattr(
+        QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(image_file), ""))
+    )
+
+    view._drop_label.clicked.emit()
+
+    assert view.selected_path() == str(image_file)
+
+
+def test_preview_area_image_rect_and_click(qtbot):
+    from PySide6.QtCore import QPointF, QSize
+    from PySide6.QtGui import QPixmap
+
+    from kitta.gui.drop_view import PreviewArea
+
+    area = PreviewArea()
+    qtbot.addWidget(area)
+    area.resize(400, 300)
+    pixmap = QPixmap(100, 300)  # tall: fits height, leaves side margins
+    pixmap.fill()
+    area.set_pixmap(pixmap)
+
+    rect = area.image_rect()
+    assert rect.size() == QSize(100, 300)
+    assert rect.center() == area.rect().center()
+
+    clicks = []
+    area.clicked.connect(lambda: clicks.append(1))
+
+    class FakeMouse:
+        def __init__(self, x, y):
+            self._pos = QPointF(x, y)
+
+        def position(self):
+            return self._pos
+
+    area.mousePressEvent(FakeMouse(10, 150))  # outside the image
+    assert clicks == []
+    area.mousePressEvent(FakeMouse(*_center(rect)))  # on the image
+    assert clicks == [1]
+
+
+def test_preview_area_hover_only_over_image(qtbot):
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QPixmap
+
+    from kitta.gui.drop_view import PreviewArea
+
+    area = PreviewArea()
+    qtbot.addWidget(area)
+    area.resize(400, 300)
+    pixmap = QPixmap(100, 300)
+    pixmap.fill()
+    area.set_pixmap(pixmap)
+
+    class FakeMouse:
+        def __init__(self, x, y):
+            self._pos = QPointF(x, y)
+
+        def position(self):
+            return self._pos
+
+    area.mouseMoveEvent(FakeMouse(*_center(area.image_rect())))
+    assert area._hover
+    assert area.cursor().shape() == Qt.CursorShape.PointingHandCursor
+
+    area.mouseMoveEvent(FakeMouse(10, 150))
+    assert not area._hover
+    assert area.cursor().shape() == Qt.CursorShape.ArrowCursor
+
+
+def _center(rect):
+    return rect.center().x(), rect.center().y()
 
 
 def test_initially_no_image_selected(view):

@@ -13,8 +13,8 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtCore import QPoint, QRect, Qt, QUrl, Signal
+from PySide6.QtGui import QImage, QPainter, QPalette, QPen, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -128,6 +128,90 @@ def _save_dropped_image(image: QImage, stem: str | None = None) -> str | None:
     return str(path)
 
 
+class DropZoneLabel(QLabel):
+    """The "Drop an image here" box: clickable, dashed border on hover."""
+
+    clicked = Signal()
+
+    def __init__(self, text: str, parent=None):
+        super().__init__(text, parent)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setStyleSheet(
+            "DropZoneLabel { font-size: 18pt; color: palette(mid);"
+            " border: 2px dashed transparent; border-radius: 8px; }"
+            " DropZoneLabel:hover { border-color: palette(mid); }"
+        )
+
+    def mousePressEvent(self, event) -> None:
+        self.clicked.emit()
+
+
+class PreviewArea(QWidget):
+    """Scaled preview of the selected image.
+
+    Only the displayed image rectangle is clickable; hovering it shows a
+    dashed border and the pointing-hand cursor.
+    """
+
+    clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMouseTracking(True)
+        self.setMinimumSize(200, 150)
+        self._pixmap: QPixmap | None = None
+        self._hover = False
+
+    def set_pixmap(self, pixmap: QPixmap) -> None:
+        self._pixmap = pixmap
+        self.update()
+
+    def image_rect(self) -> QRect:
+        """Rectangle the scaled image occupies inside this widget."""
+        if self._pixmap is None or self._pixmap.isNull():
+            return QRect()
+        size = self._pixmap.size()
+        size.scale(self.size(), Qt.AspectRatioMode.KeepAspectRatio)
+        rect = QRect(QPoint(0, 0), size)
+        rect.moveCenter(self.rect().center())
+        return rect
+
+    def paintEvent(self, event) -> None:
+        if self._pixmap is None or self._pixmap.isNull():
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        rect = self.image_rect()
+        painter.drawPixmap(rect, self._pixmap)
+        if self._hover:
+            pen = QPen(self.palette().color(QPalette.ColorRole.Mid))
+            pen.setStyle(Qt.PenStyle.DashLine)
+            pen.setWidth(2)
+            painter.setPen(pen)
+            painter.drawRect(rect.adjusted(-3, -3, 2, 2))
+        painter.end()
+
+    def _set_hover(self, hover: bool) -> None:
+        if hover != self._hover:
+            self._hover = hover
+            self.setCursor(
+                Qt.CursorShape.PointingHandCursor if hover else Qt.CursorShape.ArrowCursor
+            )
+            self.update()
+
+    def mouseMoveEvent(self, event) -> None:
+        self._set_hover(self.image_rect().contains(event.position().toPoint()))
+
+    def leaveEvent(self, event) -> None:
+        self._set_hover(False)
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event) -> None:
+        if self.image_rect().contains(event.position().toPoint()):
+            self.clicked.emit()
+
+
 class DropView(QWidget):
     """Pick an image and presets, then press Start to run the comparison."""
 
@@ -136,10 +220,7 @@ class DropView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
-        # the whole view is clickable (opens the file dialog)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._selected_path: str | None = None
-        self._preview_pixmap: QPixmap | None = None
 
         self._title_label = QLabel("Kitta")
         self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -151,14 +232,16 @@ class DropView(QWidget):
         self._tagline_label.setStyleSheet("font-size: 10pt; color: palette(mid);")
 
         # page shown while no image is selected
-        self._drop_label = QLabel(self.tr("Drop an image here\nor click to choose a file"))
-        self._drop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._drop_label.setStyleSheet("font-size: 18pt; color: palette(mid);")
+        self._drop_label = DropZoneLabel(self.tr("Drop an image here\nor click to choose a file"))
+        self._drop_label.clicked.connect(self._open_file_dialog)
+        drop_page = QWidget()
+        drop_layout = QVBoxLayout(drop_page)
+        drop_layout.setContentsMargins(48, 24, 48, 24)
+        drop_layout.addWidget(self._drop_label)
 
         # page shown once an image is selected
-        self._preview_label = QLabel()
-        self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._preview_label.setMinimumSize(200, 150)
+        self._preview_area = PreviewArea()
+        self._preview_area.clicked.connect(self._open_file_dialog)
         self._filename_label = QLabel()
         self._filename_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._filename_label.setStyleSheet("color: palette(mid);")
@@ -169,12 +252,12 @@ class DropView(QWidget):
 
         preview_page = QWidget()
         preview_layout = QVBoxLayout(preview_page)
-        preview_layout.addWidget(self._preview_label, stretch=1)
+        preview_layout.addWidget(self._preview_area, stretch=1)
         preview_layout.addWidget(self._filename_label)
         preview_layout.addWidget(self._start_button, alignment=Qt.AlignmentFlag.AlignCenter)
 
         self._center_stack = QStackedWidget()
-        self._center_stack.addWidget(self._drop_label)
+        self._center_stack.addWidget(drop_page)
         self._center_stack.addWidget(preview_page)
 
         self._checkboxes: dict[str, QCheckBox] = {}
@@ -208,10 +291,9 @@ class DropView(QWidget):
             )
             return False
         self._selected_path = path
-        self._preview_pixmap = pixmap
+        self._preview_area.set_pixmap(pixmap)
         self._filename_label.setText(f"{Path(path).name} ({pixmap.width()}×{pixmap.height()})")
         self._center_stack.setCurrentIndex(1)
-        self._update_preview()
         return True
 
     def selected_presets(self) -> list[Preset]:
@@ -227,24 +309,7 @@ class DropView(QWidget):
         if self._selected_path is not None:
             self.start_requested.emit(self._selected_path)
 
-    def _update_preview(self) -> None:
-        if self._preview_pixmap is None:
-            return
-        self._preview_label.setPixmap(
-            self._preview_pixmap.scaled(
-                self._preview_label.size(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        )
-
-    # --- input events -----------------------------------------------------
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        self._update_preview()
-
-    def mousePressEvent(self, event) -> None:
+    def _open_file_dialog(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
             self.tr("Choose an image"),
@@ -253,6 +318,8 @@ class DropView(QWidget):
         )
         if path:
             self.set_image(path)
+
+    # --- input events -----------------------------------------------------
 
     def dragEnterEvent(self, event) -> None:
         if accepts_drop(event):
