@@ -125,6 +125,26 @@ def test_partial_failure_shows_no_dialog(monkeypatch, qtbot):
     assert not errors
 
 
+def test_help_menu_about_and_licenses(monkeypatch, qtbot):
+    import kitta
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    from PySide6.QtWidgets import QDialog, QMessageBox
+
+    abouts = []
+    monkeypatch.setattr(QMessageBox, "about", lambda *args: abouts.append(args))
+    window._show_about()
+    assert abouts
+    assert kitta.__version__ in abouts[0][2]
+
+    dialogs = []
+    monkeypatch.setattr(QDialog, "exec", lambda self: dialogs.append(self))
+    window._show_licenses()
+    assert dialogs
+
+
 def test_drop_on_compare_view_previews_instead_of_starting(qtbot, image_file):
     window = MainWindow()
     qtbot.addWidget(window)

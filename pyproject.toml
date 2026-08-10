@@ -38,6 +38,43 @@ dev = [
 # (pulled in via rembg -> pymatting).
 constraint-dependencies = ["numba>=0.60"]
 
+[tool.pyappdist]
+name = "Kitta"
+python = "3.12"
+identifier = "com.github.atsuoishimoto.kitta"
+
+[[tool.pyappdist.launchers]]
+name = "kitta-gui"
+entry = "kitta.gui.app:main"
+gui = true
+icon = { windows = "assets/kitta.ico", macos = "assets/kitta.png", linux = "assets/kitta.png" }
+
+[[tool.pyappdist.launchers]]
+name = "kitta"
+entry = "kitta.cli.main:main"
+
+[[tool.pyappdist.targets]]
+name = "windows"
+platform = "windows-x86_64"
+format = "msix"
+extras = ["gui"]
+manufacturer = "Atsuo Ishimoto"
+logo = "assets/kitta.png"
+app-execution-alias = true
+
+[[tool.pyappdist.targets]]
+name = "macos"
+platform = "macos-aarch64"
+format = "pkg"
+extras = ["gui"]
+# license = "LICENSE"  # pyappdist 0.11.0 only accepts .rtf here (docs say txt/rtf/html)
+
+[[tool.pyappdist.targets]]
+name = "linux"
+platform = "linux-x86_64"
+format = "linux"
+extras = ["gui"]
+
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]
 build-backend = "uv_build"

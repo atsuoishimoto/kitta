@@ -6,8 +6,16 @@ from pathlib import Path
 
 from PIL import Image
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QMainWindow, QMessageBox, QStackedWidget
+from PySide6.QtWidgets import (
+    QDialog,
+    QMainWindow,
+    QMessageBox,
+    QPlainTextEdit,
+    QStackedWidget,
+    QVBoxLayout,
+)
 
+import kitta
 from kitta.gui.compare_view import CompareView, ViewMode
 from kitta.gui.drop_view import DropView
 from kitta.gui.image_view import Background
@@ -40,10 +48,44 @@ class MainWindow(QMainWindow):
         self.compare_view.back_requested.connect(self.show_drop_view)
         self.compare_view.cancel_requested.connect(self._cancel_compare)
 
+        self._build_menus()
+
         self._settings = QSettings(
             QSettings.Format.IniFormat, QSettings.Scope.UserScope, "Kitta", "Kitta"
         )
         self._restore_settings()
+
+    def _build_menus(self) -> None:
+        help_menu = self.menuBar().addMenu(self.tr("&Help"))
+        self.about_action = help_menu.addAction(self.tr("&About Kitta"))
+        self.about_action.triggered.connect(self._show_about)
+        self.licenses_action = help_menu.addAction(self.tr("Third-Party &Licenses"))
+        self.licenses_action.triggered.connect(self._show_licenses)
+
+    def _show_about(self) -> None:
+        QMessageBox.about(
+            self,
+            self.tr("About Kitta"),
+            self.tr(
+                "<h3>Kitta {0}</h3>"
+                "<p>Compare AI background removal models side by side. "
+                "Fully offline.</p>"
+                "<p>Licensed under the GNU General Public License v3.0 or later.<br>"
+                'See <a href="https://github.com/atsuoishimoto/kitta">'
+                "github.com/atsuoishimoto/kitta</a>.</p>"
+            ).format(kitta.__version__),
+        )
+
+    def _show_licenses(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle(self.tr("Third-Party Licenses"))
+        dialog.resize(700, 500)
+        text = QPlainTextEdit(dialog)
+        text.setReadOnly(True)
+        text.setPlainText(kitta.notice_text())
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(text)
+        dialog.exec()
 
     def show_drop_view(self) -> None:
         self._stack.setCurrentWidget(self.drop_view)

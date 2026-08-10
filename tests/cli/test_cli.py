@@ -175,6 +175,15 @@ def test_batch_empty_dir(fake_inference, tmp_path, capsys):
     assert "no image files" in capsys.readouterr().err
 
 
+def test_licenses_flag(capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--licenses"])
+    assert excinfo.value.code == 0
+    out = capsys.readouterr().out
+    assert "PySide6" in out
+    assert "BiRefNet" in out
+
+
 def test_keyboard_interrupt(monkeypatch, fake_inference, input_image, capsys):
     def interrupted(image, preset):
         raise KeyboardInterrupt

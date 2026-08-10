@@ -12,5 +12,9 @@ build/
 .pytest_cache/
 .ruff_cache/
 
+# pyappdist
+.appdist-build/
+appdist/
+
 # OS
 .DS_Store

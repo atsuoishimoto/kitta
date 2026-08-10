@@ -35,6 +35,17 @@ class CliError(Exception):
     """User-facing CLI failure; message is printed and exit code is 1."""
 
 
+class _LicensesAction(argparse.Action):
+    """Print the bundled third-party notices and exit (like --version)."""
+
+    def __init__(self, option_strings, dest, **kwargs):
+        super().__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        print(kitta.notice_text())
+        parser.exit()
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:]) if argv is None else list(argv)
     commands = {"compare": run_compare, "batch": run_batch}
@@ -61,6 +72,11 @@ def run_single(argv: list[str]) -> int:
         "Subcommands: kitta compare, kitta batch (see 'kitta compare --help').",
     )
     parser.add_argument("--version", action="version", version=f"kitta {kitta.__version__}")
+    parser.add_argument(
+        "--licenses",
+        action=_LicensesAction,
+        help="show third-party license notices and exit",
+    )
     parser.add_argument("image", type=Path, help="input image file")
     parser.add_argument("-o", "--output", type=Path, help="output PNG (default: NAME-cutout.png)")
     group = parser.add_mutually_exclusive_group()
