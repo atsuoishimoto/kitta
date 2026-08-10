@@ -295,6 +295,9 @@ class DropView(QWidget):
         presets_row.addStretch()
         for preset in PRESETS.values():
             checkbox = QCheckBox(preset.display_name)
+            font = checkbox.font()
+            font.setPointSize(12)
+            checkbox.setFont(font)
             checkbox.setChecked(preset.name in DEFAULT_PRESET_NAMES)
             self._checkboxes[preset.name] = checkbox
             presets_row.addWidget(checkbox)
@@ -307,6 +310,9 @@ class DropView(QWidget):
         layout.addWidget(self._center_stack, stretch=1)
         layout.addWidget(self._models_label)
         layout.addLayout(presets_row)
+        # one line (at the checkbox font size) of breathing room at the bottom
+        checkbox = next(iter(self._checkboxes.values()))
+        layout.addSpacing(checkbox.fontMetrics().lineSpacing())
 
         QApplication.clipboard().dataChanged.connect(self._update_paste_button)
         self._update_paste_button()
