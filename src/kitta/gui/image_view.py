@@ -43,7 +43,8 @@ def checker_pixmap() -> QPixmap:
 
 
 class ImageView(QGraphicsView):
-    view_changed = Signal()  # user-driven zoom or pan
+    view_changed = Signal()  # zoom or pan to propagate to synced views
+    user_interacted = Signal()  # explicit wheel zoom / drag pan by the user
     clicked = Signal()  # press + release without dragging
 
     def __init__(self, parent=None):
@@ -124,11 +125,17 @@ class ImageView(QGraphicsView):
     def wheelEvent(self, event) -> None:
         delta = event.angleDelta().y()
         if delta:
+            self.user_interacted.emit()
             self.zoom(ZOOM_STEP if delta > 0 else 1 / ZOOM_STEP)
 
     def mousePressEvent(self, event) -> None:
         self._press_pos = event.position()
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._press_pos is not None:  # dragging = panning
+            self.user_interacted.emit()
+        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:
         if (

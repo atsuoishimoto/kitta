@@ -164,6 +164,8 @@ class CompareView(QWidget):
         self.cells: list[ResultCell] = []
         self.original_cell: ResultCell | None = None
         self._synchronizer = ViewSynchronizer()
+        # Views auto-refit on resize until the user zooms/pans manually.
+        self._fit_mode = True
         self._selected_cell: ResultCell | None = None
         self._view_mode = ViewMode.RESULT
 
@@ -272,9 +274,12 @@ class CompareView(QWidget):
 
         original = QPixmap.fromImage(pil_to_qimage(image))
 
+        self._fit_mode = True
+
         # the original image always occupies the first grid slot
         self.original_cell = ResultCell(None, original)
         self.original_cell.view.set_background(self._current_background())
+        self.original_cell.view.user_interacted.connect(self._leave_fit_mode)
         self._grid.addWidget(self.original_cell, 0, 0)
         self._synchronizer.add(self.original_cell.view)
 
@@ -282,6 +287,7 @@ class CompareView(QWidget):
             cell = ResultCell(preset, original)
             cell.clicked.connect(self._on_cell_clicked)
             cell.view.set_background(self._current_background())
+            cell.view.user_interacted.connect(self._leave_fit_mode)
             cell.set_view_mode(self._view_mode)
             position = index + 1
             self._grid.addWidget(cell, position // GRID_COLUMNS, position % GRID_COLUMNS)
@@ -301,6 +307,16 @@ class CompareView(QWidget):
 
         self.set_running(True)
         QTimer.singleShot(0, self._synchronizer.fit_all)
+
+    def _leave_fit_mode(self) -> None:
+        self._fit_mode = False
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        # While no manual zoom/pan happened, keep images fitted to the
+        # resized cells (a manually chosen view is left untouched).
+        if self._fit_mode and self.cells:
+            QTimer.singleShot(0, self._synchronizer.fit_all)
 
     def set_running(self, running: bool) -> None:
         """Toggle the Cancel button shown while a comparison is running."""

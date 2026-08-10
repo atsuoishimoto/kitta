@@ -256,6 +256,62 @@ def test_selection_keeps_cell_widths_equal(qtbot, tmp_path):
     assert all(abs(a - b) <= 2 for a, b in zip(after, before, strict=True))
 
 
+class WheelStub:
+    """Minimal wheel event: only angleDelta() is used by ImageView."""
+
+    def __init__(self, delta=120):
+        self._delta = delta
+
+    def angleDelta(self):
+        from PySide6.QtCore import QPoint
+
+        return QPoint(0, self._delta)
+
+
+def make_shown_view(qtbot, tmp_path, sample_image, size=(900, 600)):
+    view = CompareView()
+    qtbot.addWidget(view)
+    view.resize(*size)
+    view.show()
+    view.begin(tmp_path / "photo.jpg", sample_image, PRESET_LIST)
+    qtbot.wait(20)  # let the queued fit_all fire
+    return view
+
+
+def test_resize_refits_images(qtbot, tmp_path, sample_image):
+    view = make_shown_view(qtbot, tmp_path, sample_image)
+    before = view.cells[0].view.transform().m11()
+
+    view.resize(500, 400)
+    qtbot.wait(20)
+
+    after = view.cells[0].view.transform().m11()
+    assert after != before  # images rescaled with the panes
+    assert view.cells[1].view.transform() == view.cells[0].view.transform()
+    assert view.original_cell.view.transform() == view.cells[0].view.transform()
+
+
+def test_manual_zoom_survives_resize(qtbot, tmp_path, sample_image):
+    view = make_shown_view(qtbot, tmp_path, sample_image)
+
+    view.cells[0].view.wheelEvent(WheelStub())  # manual zoom leaves fit mode
+    zoomed = view.cells[0].view.transform().m11()
+
+    view.resize(600, 450)
+    qtbot.wait(20)
+
+    assert view.cells[0].view.transform().m11() == pytest.approx(zoomed)
+
+
+def test_new_begin_restores_fit_mode(qtbot, tmp_path, sample_image):
+    view = make_shown_view(qtbot, tmp_path, sample_image)
+    view.cells[0].view.wheelEvent(WheelStub())
+    assert not view._fit_mode
+
+    view.begin(tmp_path / "photo.jpg", sample_image, PRESET_LIST)
+    assert view._fit_mode
+
+
 def test_zoom_is_synchronized_across_cells(view, qtbot):
     qtbot.wait(10)  # let the fit_all queued by begin() fire first
     before = view.cells[0].view.transform().m11()
