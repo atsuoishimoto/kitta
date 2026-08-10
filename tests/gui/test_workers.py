@@ -6,7 +6,7 @@ from kitta.core.remove import RemovalResult
 from kitta.gui import workers as workers_mod
 from kitta.gui.workers import CompareWorker
 
-PRESET_LIST = [PRESETS["fast"], PRESETS["fine-detail"]]
+PRESET_LIST = [PRESETS["fast"], PRESETS["balanced"]]
 
 
 def fake_result(preset) -> RemovalResult:
@@ -24,7 +24,7 @@ def fake_compare(image, presets, callbacks):
     results = []
     for index, preset in enumerate(presets):
         callbacks.on_start(index, preset)
-        if preset.name == "fine-detail":
+        if preset.name == "balanced":
             callbacks.on_error(index, preset, RuntimeError("boom"))
             results.append(None)
             continue
@@ -59,7 +59,7 @@ def test_worker_emits_lifecycle_signals(worker, qtbot):
         ("start", 0, "fast"),
         ("dl", 0, 50, 100),
         ("result", 0, "fast"),
-        ("start", 1, "fine-detail"),
+        ("start", 1, "balanced"),
         ("failed", 1, "boom"),
     ]
 

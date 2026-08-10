@@ -6,7 +6,7 @@ from kitta.core.compare import CompareCallbacks, compare
 from kitta.core.models import PRESETS
 from kitta.core.remove import RemovalResult
 
-PRESET_LIST = [PRESETS["fast"], PRESETS["fine-detail"]]
+PRESET_LIST = [PRESETS["fast"], PRESETS["balanced"]]
 
 
 def fake_result(preset) -> RemovalResult:
@@ -35,12 +35,12 @@ def test_compare_runs_presets_in_order(monkeypatch, no_download, sample_image):
 
     results = compare(sample_image, PRESET_LIST, callbacks)
 
-    assert [r.preset_name for r in results] == ["fast", "fine-detail"]
+    assert [r.preset_name for r in results] == ["fast", "balanced"]
     assert events == [
         ("start", 0, "fast"),
         ("result", 0, "fast"),
-        ("start", 1, "fine-detail"),
-        ("result", 1, "fine-detail"),
+        ("start", 1, "balanced"),
+        ("result", 1, "balanced"),
     ]
 
 
@@ -80,7 +80,7 @@ def test_compare_reports_errors_and_continues(monkeypatch, no_download, sample_i
     results = compare(sample_image, PRESET_LIST, callbacks)
 
     assert results[0] is None
-    assert results[1].preset_name == "fine-detail"
+    assert results[1].preset_name == "balanced"
     assert errors == [(0, "fast", "boom")]
 
 

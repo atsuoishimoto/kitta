@@ -44,8 +44,8 @@ class AlphaMatting:
 class Preset:
     """A named, user-facing configuration resolving to a model + parameters."""
 
-    name: str  # identifier used by CLI/TOML (e.g. "fine-detail")
-    display_name: str  # user-facing label (e.g. "Fine Detail")
+    name: str  # identifier used by CLI/TOML (e.g. "quality")
+    display_name: str  # user-facing label (e.g. "High Quality")
     model: ModelSpec
     alpha_matting: AlphaMatting = field(default_factory=AlphaMatting)
     output_format: str = "png"
@@ -106,18 +106,20 @@ _MODEL_LIST = [
 
 MODELS: dict[str, ModelSpec] = {spec.name: spec for spec in _MODEL_LIST}
 
+# Ordered fastest/lightest -> highest quality, then the specialized ones;
+# this order is also the GUI checkbox order.
 _PRESET_LIST = [
     Preset(name="fast", display_name="Fast", model=MODELS["u2netp"]),
-    Preset(name="general", display_name="General", model=MODELS["birefnet-general"]),
+    Preset(name="balanced", display_name="Balanced", model=MODELS["isnet-general-use"]),
+    Preset(name="quality", display_name="High Quality", model=MODELS["birefnet-general"]),
     Preset(name="portrait", display_name="Portrait", model=MODELS["birefnet-portrait"]),
     Preset(name="anime", display_name="Anime", model=MODELS["isnet-anime"]),
-    Preset(name="fine-detail", display_name="Fine Detail", model=MODELS["isnet-general-use"]),
 ]
 
 PRESETS: dict[str, Preset] = {preset.name: preset for preset in _PRESET_LIST}
 
 # Presets pre-selected on the GUI drop screen (product plan §10).
-DEFAULT_PRESET_NAMES = ("fast", "general", "fine-detail")
+DEFAULT_PRESET_NAMES = ("fast", "balanced", "quality")
 
 
 def get_model(name: str) -> ModelSpec:

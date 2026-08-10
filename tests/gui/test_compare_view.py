@@ -7,7 +7,7 @@ from kitta.core.remove import RemovalResult
 from kitta.gui.compare_view import CompareView, ViewMode, pil_to_qimage
 from kitta.gui.image_view import Background
 
-PRESET_LIST = [PRESETS["fast"], PRESETS["fine-detail"]]
+PRESET_LIST = [PRESETS["fast"], PRESETS["balanced"]]
 
 
 def fake_result(preset) -> RemovalResult:
@@ -94,7 +94,7 @@ def test_selection_is_exclusive(view):
     view._on_cell_clicked(view.cells[1])
     assert not view.cells[0].selected
     assert view.cells[1].selected
-    assert view.selected_result().preset_name == "fine-detail"
+    assert view.selected_result().preset_name == "balanced"
 
 
 def test_save_png_and_mask(monkeypatch, view, tmp_path):
@@ -142,7 +142,7 @@ def test_selection_keeps_cell_widths_equal(qtbot, tmp_path):
     view.resize(1100, 700)
     view.show()
     image = Image.new("RGB", (1080, 1440), "blue")
-    presets = [PRESETS["fast"], PRESETS["general"], PRESETS["fine-detail"]]
+    presets = [PRESETS["fast"], PRESETS["quality"], PRESETS["balanced"]]
     view.begin(tmp_path / "photo.jpg", image, presets)
     for index, preset in enumerate(presets):
         big = Image.new("RGBA", (1080, 1440), (200, 150, 100, 255))

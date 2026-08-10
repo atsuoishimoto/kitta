@@ -86,14 +86,14 @@ def test_compare_with_presets(fake_inference, input_image, tmp_path, capsys):
             "compare",
             str(input_image),
             "--presets",
-            "fast,fine-detail",
+            "fast,balanced",
             "--output-dir",
             str(outdir),
         ]
     )
     assert code == 0
     assert (outdir / "photo-fast.png").exists()
-    assert (outdir / "photo-fine-detail.png").exists()
+    assert (outdir / "photo-balanced.png").exists()
     out = capsys.readouterr().out
     assert "2/2 succeeded" in out
 
@@ -110,7 +110,7 @@ def test_compare_reports_failure(monkeypatch, fake_inference, input_image, capsy
         return fake_result(preset)
 
     monkeypatch.setattr(compare_mod, "remove_background", flaky)
-    code = main(["compare", str(input_image), "--presets", "fast,fine-detail"])
+    code = main(["compare", str(input_image), "--presets", "fast,balanced"])
     assert code == 1
     captured = capsys.readouterr()
     assert "1/2 succeeded" in captured.out
