@@ -209,6 +209,9 @@ class CompareView(QWidget):
             self._background_buttons[background] = button
         self._background_buttons[Background.CHECKER].setChecked(True)
 
+        self._reset_view_button = QPushButton(self.tr("Reset View"))
+        self._reset_view_button.clicked.connect(self.reset_view)
+
         self._save_png_button = QPushButton(self.tr("Save PNG"))
         self._save_png_button.clicked.connect(self.save_png)
         self._save_mask_button = QPushButton(self.tr("Save Mask"))
@@ -229,6 +232,7 @@ class CompareView(QWidget):
         for button in (
             self._back_button,
             self._cancel_button,
+            self._reset_view_button,
             *self._mode_buttons.values(),
             *self._background_buttons.values(),
             *self._selection_buttons,
@@ -244,6 +248,8 @@ class CompareView(QWidget):
         toolbar.addSpacing(16)
         for button in self._background_buttons.values():
             toolbar.addWidget(button)
+        toolbar.addSpacing(16)
+        toolbar.addWidget(self._reset_view_button)
         toolbar.addStretch()
         toolbar.addWidget(self._save_png_button)
         toolbar.addWidget(self._save_mask_button)
@@ -310,6 +316,11 @@ class CompareView(QWidget):
 
     def _leave_fit_mode(self) -> None:
         self._fit_mode = False
+
+    def reset_view(self) -> None:
+        """Back to the initial state: fit all views and follow resizes again."""
+        self._fit_mode = True
+        self._synchronizer.fit_all()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

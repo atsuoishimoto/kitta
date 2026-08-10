@@ -312,6 +312,22 @@ def test_new_begin_restores_fit_mode(qtbot, tmp_path, sample_image):
     assert view._fit_mode
 
 
+def test_reset_view_restores_fit(qtbot, tmp_path, sample_image):
+    view = make_shown_view(qtbot, tmp_path, sample_image)
+    fitted = view.cells[0].view.transform().m11()
+
+    view.cells[0].view.wheelEvent(WheelStub())
+    assert not view._fit_mode
+    assert view.cells[0].view.transform().m11() != pytest.approx(fitted)
+
+    view._reset_view_button.click()
+
+    assert view._fit_mode
+    assert view.cells[0].view.transform().m11() == pytest.approx(fitted)
+    assert view.cells[1].view.transform() == view.cells[0].view.transform()
+    assert view.original_cell.view.transform() == view.cells[0].view.transform()
+
+
 def test_zoom_is_synchronized_across_cells(view, qtbot):
     qtbot.wait(10)  # let the fit_all queued by begin() fire first
     before = view.cells[0].view.transform().m11()
