@@ -187,7 +187,7 @@ dev = [
 requires-dist = [
     { name = "numpy", specifier = ">=1.26,<2.3" },
     { name = "onnxruntime", specifier = ">=1.19" },
-    { name = "pillow", specifier = ">=10.4" },
+    { name = "pillow", specifier = ">=11.3" },
     { name = "pyside6", marker = "extra == 'gui'", specifier = ">=6.7" },
     { name = "rembg", specifier = ">=2.0.66" },
     { name = "tomli-w", specifier = ">=1.0" },

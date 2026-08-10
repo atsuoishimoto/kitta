@@ -26,7 +26,7 @@ from kitta.core.models import (
     get_preset,
 )
 
-IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".avif", ".bmp", ".tif", ".tiff"}
 
 DEFAULT_PRESET = "fast"
 

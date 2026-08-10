@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 
 from kitta.gui.drop_view import accepts_drop, extract_dropped_image_path
 from kitta.gui.image_view import Background, ImageView, ViewSynchronizer
+from kitta.gui.images import pil_to_qimage
 
 GRID_COLUMNS = 3
 
@@ -38,15 +39,6 @@ class ViewMode(Enum):
     ORIGINAL = "original"
     MASK = "mask"
     RESULT = "result"
-
-
-def pil_to_qimage(image) -> QImage:
-    """Convert a PIL image to a detached QImage."""
-    if image.mode != "RGBA":
-        image = image.convert("RGBA")
-    data = image.tobytes("raw", "RGBA")
-    qimage = QImage(data, image.width, image.height, image.width * 4, QImage.Format_RGBA8888)
-    return qimage.copy()
 
 
 class ResultCell(QFrame):

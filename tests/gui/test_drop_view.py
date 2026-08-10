@@ -257,8 +257,19 @@ def test_start_emits_only_with_image(view, image_file, qtbot):
 def test_is_supported_image():
     assert is_supported_image("photo.JPG")
     assert is_supported_image("/tmp/x/photo.webp")
+    assert is_supported_image("photo.avif")
     assert not is_supported_image("notes.txt")
     assert not is_supported_image("archive.zip")
+
+
+def test_set_image_previews_avif(view, tmp_path):
+    # Qt ships no AVIF plugin: the preview must come from the Pillow fallback
+    path = tmp_path / "photo.avif"
+    Image.new("RGB", (32, 24), "white").save(path)
+
+    assert view.set_image(str(path))
+    assert view.selected_path() == str(path)
+    assert "32×24" in view._filename_label.text()
 
 
 class FakeDropEvent:

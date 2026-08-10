@@ -31,8 +31,10 @@ from PySide6.QtWidgets import (
 import kitta
 from kitta.core import paths
 from kitta.core.models import DEFAULT_PRESET_NAMES, PRESETS, Preset
+from kitta.gui.images import load_qimage, qimage_from_data
 
-IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
+# ".avif" is decoded through Pillow: Qt has no AVIF plugin (see gui.images)
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".avif", ".bmp", ".tif", ".tiff"}
 
 # secondary (gray) text color, dark enough to stay readable
 SECONDARY_TEXT_COLOR = "#505050"
@@ -123,7 +125,7 @@ def _download_dropped_image(url: QUrl) -> str | None:
         return None
     if len(data) > MAX_DOWNLOAD_SIZE:
         return None
-    image = QImage.fromData(data)
+    image = qimage_from_data(data)
     if image.isNull():
         return None
     stem = re.sub(r"[^A-Za-z0-9._-]", "_", Path(url.fileName()).stem)[:60]
@@ -324,7 +326,7 @@ class DropView(QWidget):
 
     def set_image(self, path: str) -> bool:
         """Preview ``path`` and show the Start button. False if unreadable."""
-        pixmap = QPixmap(path)
+        pixmap = QPixmap.fromImage(load_qimage(path))
         if pixmap.isNull():
             QMessageBox.critical(
                 self, self.tr("Kitta"), self.tr("Cannot open image:\n{0}").format(path)
@@ -382,7 +384,9 @@ class DropView(QWidget):
             self,
             self.tr("Choose an image"),
             "",
-            self.tr("Images (*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff)"),
+            self.tr("Images ({0})").format(
+                " ".join(f"*{suffix}" for suffix in sorted(IMAGE_SUFFIXES))
+            ),
         )
         if path:
             self.set_image(path)
