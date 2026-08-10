@@ -7,3 +7,7 @@ shows the results side by side, so you can pick the best model and settings for
 each image. All inference runs locally — no cloud, no upload, no account.
 
 > Status: under development. See `.plan/` for the product plan.
+
+## License
+
+GPL-3.0-or-later. See [LICENSE](LICENSE).

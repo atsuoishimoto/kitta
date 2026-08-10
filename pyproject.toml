@@ -3,6 +3,8 @@ name = "kitta"
 version = "0.1.0"
 description = "Compare AI background removal models side by side. Fully offline."
 readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "rembg>=2.0.66",
