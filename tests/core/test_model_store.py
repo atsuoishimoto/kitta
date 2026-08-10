@@ -122,6 +122,17 @@ def test_ensure_skips_download_when_available(monkeypatch, tmp_path):
     assert model_store.ensure(spec, models_dir=tmp_path) == tmp_path / spec.filename
 
 
+def test_download_cancelled_keeps_part_file(monkeypatch, tmp_path):
+    spec = make_spec()
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req: FakeResponse(PAYLOAD))
+
+    with pytest.raises(model_store.DownloadCancelled):
+        model_store.download(spec, models_dir=tmp_path, should_cancel=lambda: True)
+
+    assert not (tmp_path / spec.filename).exists()
+    assert (tmp_path / (spec.filename + ".part")).exists()  # kept for resuming
+
+
 @pytest.mark.network
 def test_download_real_u2netp(tmp_path):
     spec = MODELS["u2netp"]

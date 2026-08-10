@@ -15,6 +15,12 @@ from PIL import Image
 from kitta.core import model_store, paths
 from kitta.core.models import Preset
 
+# Inference input is capped at this edge length: the models work at
+# ~1024px internally anyway, and full-size processing of huge photos
+# (8000px+) only costs memory and alpha-matting time. The mask is scaled
+# back up and composed with the original, so output keeps full resolution.
+MAX_INFERENCE_EDGE = 4096
+
 _sessions: dict[str, object] = {}
 
 
@@ -54,9 +60,14 @@ def remove_background(image: Image.Image, preset: Preset) -> RemovalResult:
     session = _get_session(preset.model.name)
     from rembg import remove
 
+    work = image
+    if max(image.size) > MAX_INFERENCE_EDGE:
+        work = image.copy()
+        work.thumbnail((MAX_INFERENCE_EDGE, MAX_INFERENCE_EDGE), Image.Resampling.LANCZOS)
+
     start = time.perf_counter()
     result = remove(
-        image,
+        work,
         session=session,
         alpha_matting=preset.alpha_matting.enabled,
         alpha_matting_foreground_threshold=preset.alpha_matting.foreground_threshold,
@@ -67,6 +78,11 @@ def remove_background(image: Image.Image, preset: Preset) -> RemovalResult:
 
     rgba = result if result.mode == "RGBA" else result.convert("RGBA")
     mask = rgba.getchannel("A")
+    if work is not image:
+        # compose the upscaled mask with the original for full resolution
+        mask = mask.resize(image.size, Image.Resampling.LANCZOS)
+        rgba = image.convert("RGBA")
+        rgba.putalpha(mask)
     return RemovalResult(
         image=rgba,
         mask=mask,

@@ -50,7 +50,7 @@ def test_compare_downloads_missing_model(monkeypatch, sample_image):
     monkeypatch.setattr(compare_mod.model_store, "is_available", lambda spec: False)
     downloads = []
 
-    def fake_ensure(spec, progress_cb=None):
+    def fake_ensure(spec, progress_cb=None, should_cancel=None):
         progress_cb(50, 100)
         downloads.append(spec.name)
 
@@ -92,7 +92,7 @@ def test_cached_presets_run_before_downloads(monkeypatch, sample_image):
     monkeypatch.setattr(compare_mod.model_store, "is_available", lambda spec: spec.name != "u2netp")
     release_download = threading.Event()
 
-    def fake_ensure(spec, progress_cb=None):
+    def fake_ensure(spec, progress_cb=None, should_cancel=None):
         assert release_download.wait(5)
 
     monkeypatch.setattr(compare_mod.model_store, "ensure", fake_ensure)
@@ -115,7 +115,7 @@ def test_cached_presets_run_before_downloads(monkeypatch, sample_image):
 def test_download_failure_is_reported_and_others_continue(monkeypatch, sample_image):
     monkeypatch.setattr(compare_mod.model_store, "is_available", lambda spec: False)
 
-    def fake_ensure(spec, progress_cb=None):
+    def fake_ensure(spec, progress_cb=None, should_cancel=None):
         if spec.name == "u2netp":
             raise RuntimeError("network down")
 
@@ -129,6 +129,46 @@ def test_download_failure_is_reported_and_others_continue(monkeypatch, sample_im
     assert results[0] is None
     assert results[1].preset_name == "balanced"
     assert errors == [(0, "fast", "network down")]
+
+
+def test_cancel_between_presets(monkeypatch, no_download, sample_image):
+    cancelled_flag = {"value": False}
+
+    def fake_remove(image, preset):
+        cancelled_flag["value"] = True  # cancel right after the first inference
+        return fake_result(preset)
+
+    monkeypatch.setattr(compare_mod, "remove_background", fake_remove)
+    cancelled = []
+    callbacks = CompareCallbacks(
+        on_cancelled=lambda i, p: cancelled.append((i, p.name)),
+        should_cancel=lambda: cancelled_flag["value"],
+    )
+
+    results = compare(sample_image, PRESET_LIST, callbacks)
+
+    assert results[0].preset_name == "fast"
+    assert results[1] is None
+    assert cancelled == [(1, "balanced")]
+
+
+def test_cancel_during_download(monkeypatch, sample_image):
+    from kitta.core import model_store
+
+    monkeypatch.setattr(compare_mod.model_store, "is_available", lambda spec: False)
+
+    def fake_ensure(spec, progress_cb=None, should_cancel=None):
+        raise model_store.DownloadCancelled("cancelled")
+
+    monkeypatch.setattr(compare_mod.model_store, "ensure", fake_ensure)
+    monkeypatch.setattr(compare_mod, "remove_background", lambda image, preset: fake_result(preset))
+    cancelled = []
+    callbacks = CompareCallbacks(on_cancelled=lambda i, p: cancelled.append((i, p.name)))
+
+    results = compare(sample_image, PRESET_LIST, callbacks)
+
+    assert results == [None, None]
+    assert sorted(cancelled) == [(0, "fast"), (1, "balanced")]
 
 
 def test_compare_raises_without_error_callback(monkeypatch, no_download, sample_image):

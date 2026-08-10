@@ -175,6 +175,16 @@ def test_batch_empty_dir(fake_inference, tmp_path, capsys):
     assert "no image files" in capsys.readouterr().err
 
 
+def test_keyboard_interrupt(monkeypatch, fake_inference, input_image, capsys):
+    def interrupted(image, preset):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(remove_mod, "remove_background", interrupted)
+
+    assert main([str(input_image)]) == 130
+    assert "interrupted" in capsys.readouterr().err
+
+
 @pytest.mark.inference
 def test_single_image_real_u2netp(input_image, tmp_path):
     output = tmp_path / "real.png"

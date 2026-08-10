@@ -22,12 +22,18 @@ class CompareWorker(QThread):
     download_progress = Signal(int, object, int, int)  # index, Preset, done, total
     result_ready = Signal(int, object, object)  # index, Preset, RemovalResult
     model_failed = Signal(int, object, str)  # index, Preset, error message
+    model_cancelled = Signal(int, object)  # index, Preset
     compare_finished = Signal(list)  # list[RemovalResult | None]
 
     def __init__(self, image, presets, parent=None):
         super().__init__(parent)
         self._image = image
         self._presets = list(presets)
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        """Ask the running comparison to stop at the next check point."""
+        self._cancelled = True
 
     def run(self) -> None:
         callbacks = CompareCallbacks(
@@ -35,6 +41,8 @@ class CompareWorker(QThread):
             on_download_progress=lambda i, p, d, t: self.download_progress.emit(i, p, d, t),
             on_result=lambda i, p, r: self.result_ready.emit(i, p, r),
             on_error=lambda i, p, e: self.model_failed.emit(i, p, str(e)),
+            on_cancelled=lambda i, p: self.model_cancelled.emit(i, p),
+            should_cancel=lambda: self._cancelled,
         )
         try:
             results = compare(self._image, self._presets, callbacks)

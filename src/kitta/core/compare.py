@@ -36,6 +36,10 @@ class CompareCallbacks:
     on_download_progress: Callable[[int, Preset, int, int], None] | None = None
     on_result: Callable[[int, Preset, RemovalResult], None] | None = None
     on_error: Callable[[int, Preset, Exception], None] | None = None
+    on_cancelled: Callable[[int, Preset], None] | None = None
+    # Polled between presets and during download chunks; a running
+    # inference itself cannot be interrupted.
+    should_cancel: Callable[[], bool] | None = None
 
 
 def compare(
@@ -64,8 +68,15 @@ def compare(
     # (index, preset, error) for each finished download
     downloaded: queue.SimpleQueue = queue.SimpleQueue()
 
+    def cancelled() -> bool:
+        return callbacks.should_cancel is not None and callbacks.should_cancel()
+
     def download_all() -> None:
-        for index, preset in missing:
+        for position, (index, preset) in enumerate(missing):
+            if cancelled():
+                for rest_index, rest_preset in missing[position:]:
+                    downloaded.put((rest_index, rest_preset, model_store.DownloadCancelled("")))
+                return
             progress_cb = None
             if callbacks.on_download_progress:
 
@@ -79,9 +90,13 @@ def compare(
                     cb(index, preset, done, total)
 
             try:
-                model_store.ensure(preset.model, progress_cb)
+                model_store.ensure(preset.model, progress_cb, should_cancel=cancelled)
             except Exception as exc:  # noqa: BLE001 - marshaled back to the main loop
                 downloaded.put((index, preset, exc))
+                if isinstance(exc, model_store.DownloadCancelled):
+                    for rest_index, rest_preset in missing[position + 1 :]:
+                        downloaded.put((rest_index, rest_preset, model_store.DownloadCancelled("")))
+                    return
                 continue
             downloaded.put((index, preset, None))
 
@@ -99,22 +114,32 @@ def compare(
         if callbacks.on_result:
             callbacks.on_result(index, preset, result)
 
+    def notify_cancelled(index: int, preset: Preset) -> None:
+        if callbacks.on_cancelled:
+            callbacks.on_cancelled(index, preset)
+
     downloader = None
     if missing:
         downloader = threading.Thread(target=download_all, name="kitta-model-download", daemon=True)
         downloader.start()
 
-    for index, preset in available:
+    for position, (index, preset) in enumerate(available):
+        if cancelled():
+            for rest_index, rest_preset in available[position:]:
+                notify_cancelled(rest_index, rest_preset)
+            break
         run_inference(index, preset)
 
     for _ in missing:
         index, preset, error = downloaded.get()
-        if error is not None:
-            if callbacks.on_error is None:
-                raise error
+        if error is None and not cancelled():
+            run_inference(index, preset)
+        elif error is None or isinstance(error, model_store.DownloadCancelled):
+            notify_cancelled(index, preset)
+        elif callbacks.on_error is None:
+            raise error
+        else:
             callbacks.on_error(index, preset, error)
-            continue
-        run_inference(index, preset)
 
     if downloader is not None:
         downloader.join()

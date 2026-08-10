@@ -64,6 +64,33 @@ def test_worker_emits_lifecycle_signals(worker, qtbot):
     ]
 
 
+def test_worker_cancel(monkeypatch, qtbot):
+    def cancellable_compare(image, presets, callbacks):
+        results = []
+        for index, preset in enumerate(presets):
+            if callbacks.should_cancel():
+                callbacks.on_cancelled(index, preset)
+                results.append(None)
+                continue
+            result = fake_result(preset)
+            results.append(result)
+            callbacks.on_result(index, preset, result)
+        return results
+
+    monkeypatch.setattr(workers_mod, "compare", cancellable_compare)
+    worker = CompareWorker(Image.new("RGB", (8, 8)), PRESET_LIST)
+    cancelled = []
+    worker.model_cancelled.connect(lambda i, p: cancelled.append((i, p.name)))
+
+    worker.cancel()  # cancel before it even starts
+    with qtbot.waitSignal(worker.compare_finished, timeout=5000) as blocker:
+        worker.start()
+    qtbot.waitUntil(worker.isFinished, timeout=5000)
+
+    assert blocker.args[0] == [None, None]
+    assert cancelled == [(0, "fast"), (1, "balanced")]
+
+
 def test_worker_survives_total_failure(monkeypatch, qtbot):
     def broken_compare(image, presets, callbacks):
         raise RuntimeError("catastrophic")

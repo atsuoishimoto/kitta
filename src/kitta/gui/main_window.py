@@ -5,10 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from PIL import Image
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QMainWindow, QMessageBox, QStackedWidget
 
-from kitta.gui.compare_view import CompareView
+from kitta.gui.compare_view import CompareView, ViewMode
 from kitta.gui.drop_view import DropView
+from kitta.gui.image_view import Background
 from kitta.gui.workers import CompareWorker
 
 
@@ -36,6 +38,12 @@ class MainWindow(QMainWindow):
         self.drop_view.start_requested.connect(self.start_compare)
         self.compare_view.image_dropped.connect(self._on_new_image_dropped)
         self.compare_view.back_requested.connect(self.show_drop_view)
+        self.compare_view.cancel_requested.connect(self._cancel_compare)
+
+        self._settings = QSettings(
+            QSettings.Format.IniFormat, QSettings.Scope.UserScope, "Kitta", "Kitta"
+        )
+        self._restore_settings()
 
     def show_drop_view(self) -> None:
         self._stack.setCurrentWidget(self.drop_view)
@@ -70,6 +78,7 @@ class MainWindow(QMainWindow):
         worker.download_progress.connect(self.compare_view.on_download_progress)
         worker.result_ready.connect(self.compare_view.on_result)
         worker.model_failed.connect(self.compare_view.on_model_failed)
+        worker.model_cancelled.connect(self.compare_view.on_model_cancelled)
         worker.compare_finished.connect(self._on_compare_finished)
         worker.finished.connect(worker.deleteLater)
         self._worker = worker
@@ -77,5 +86,57 @@ class MainWindow(QMainWindow):
 
         self._stack.setCurrentWidget(self.compare_view)
 
+    def _cancel_compare(self) -> None:
+        if self._worker is not None:
+            self._worker.cancel()
+
     def _on_compare_finished(self, results) -> None:
         self._worker = None
+        self.compare_view.set_running(False)
+        if results and all(result is None for result in results):
+            QMessageBox.critical(
+                self,
+                self.tr("Kitta"),
+                self.tr(
+                    "No model produced a result. "
+                    "Check the error messages in each cell "
+                    "(a network connection is required to download models)."
+                ),
+            )
+
+    # --- settings ---------------------------------------------------------
+
+    def _restore_settings(self) -> None:
+        geometry = self._settings.value("window/geometry")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
+        presets = self._settings.value("presets/selected")
+        if presets is not None:
+            names = [name for name in str(presets).split(",") if name]
+            self.drop_view.set_selected_presets(names)
+        background = self._settings.value("view/background")
+        if background is not None:
+            try:
+                self.compare_view.set_background(Background(background))
+            except ValueError:
+                pass
+        mode = self._settings.value("view/mode")
+        if mode is not None:
+            try:
+                self.compare_view.set_view_mode(ViewMode(mode))
+            except ValueError:
+                pass
+
+    def _save_settings(self) -> None:
+        self._settings.setValue("window/geometry", self.saveGeometry())
+        names = [preset.name for preset in self.drop_view.selected_presets()]
+        self._settings.setValue("presets/selected", ",".join(names))
+        self._settings.setValue("view/background", self.compare_view.background().value)
+        self._settings.setValue("view/mode", self.compare_view.view_mode().value)
+
+    def closeEvent(self, event) -> None:
+        self._save_settings()
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.cancel()
+            self._worker.wait(10000)
+        super().closeEvent(event)

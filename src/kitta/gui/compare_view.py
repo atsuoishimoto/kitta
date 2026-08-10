@@ -118,6 +118,10 @@ class ResultCell(QFrame):
         self.status_label.setText(self.tr("Failed: {0}").format(message))
         self.status_label.setStyleSheet("color: red;")
 
+    def show_cancelled(self) -> None:
+        self.progress_bar.setVisible(False)
+        self.status_label.setText(self.tr("Cancelled"))
+
     # --- display ----------------------------------------------------------
 
     def set_view_mode(self, mode: ViewMode) -> None:
@@ -150,6 +154,7 @@ class ResultCell(QFrame):
 
 class CompareView(QWidget):
     back_requested = Signal()
+    cancel_requested = Signal()
     image_dropped = Signal(str)  # a new image dropped directly on this screen
 
     def __init__(self, parent=None):
@@ -165,6 +170,9 @@ class CompareView(QWidget):
         # --- toolbar ------------------------------------------------------
         self._back_button = QPushButton(self.tr("New Image"))
         self._back_button.clicked.connect(self.back_requested)
+        self._cancel_button = QPushButton(self.tr("Cancel"))
+        self._cancel_button.setVisible(False)
+        self._cancel_button.clicked.connect(self._on_cancel_clicked)
 
         self._mode_group = QButtonGroup(self)
         mode_buttons = [
@@ -218,6 +226,7 @@ class CompareView(QWidget):
 
         for button in (
             self._back_button,
+            self._cancel_button,
             *self._mode_buttons.values(),
             *self._background_buttons.values(),
             *self._selection_buttons,
@@ -226,6 +235,7 @@ class CompareView(QWidget):
 
         toolbar = QHBoxLayout()
         toolbar.addWidget(self._back_button)
+        toolbar.addWidget(self._cancel_button)
         toolbar.addSpacing(16)
         for button in self._mode_buttons.values():
             toolbar.addWidget(button)
@@ -289,7 +299,20 @@ class CompareView(QWidget):
         for row in range(max(self._grid.rowCount(), used_rows)):
             self._grid.setRowStretch(row, 1 if row < used_rows else 0)
 
+        self.set_running(True)
         QTimer.singleShot(0, self._synchronizer.fit_all)
+
+    def set_running(self, running: bool) -> None:
+        """Toggle the Cancel button shown while a comparison is running."""
+        self._cancel_button.setVisible(running)
+        if running:
+            self._cancel_button.setEnabled(True)
+            self._cancel_button.setText(self.tr("Cancel"))
+
+    def _on_cancel_clicked(self) -> None:
+        self._cancel_button.setEnabled(False)
+        self._cancel_button.setText(self.tr("Cancelling..."))
+        self.cancel_requested.emit()
 
     # --- worker signal slots ----------------------------------------------
 
@@ -304,6 +327,9 @@ class CompareView(QWidget):
 
     def on_model_failed(self, index: int, preset, message: str) -> None:
         self.cells[index].show_error(message)
+
+    def on_model_cancelled(self, index: int, preset) -> None:
+        self.cells[index].show_cancelled()
 
     # --- display switching ------------------------------------------------
 
@@ -323,6 +349,9 @@ class CompareView(QWidget):
             cell.view.set_background(background)
         if self.original_cell is not None:
             self.original_cell.view.set_background(background)
+
+    def background(self) -> Background:
+        return self._current_background()
 
     def _current_background(self) -> Background:
         for background, button in self._background_buttons.items():

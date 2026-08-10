@@ -81,6 +81,50 @@ def test_back_returns_to_drop_view(qtbot):
     assert window._stack.currentWidget() is window.drop_view
 
 
+def test_settings_roundtrip(qtbot):
+    from kitta.gui.compare_view import ViewMode
+    from kitta.gui.image_view import Background
+
+    first = MainWindow()
+    qtbot.addWidget(first)
+    first.drop_view.set_selected_presets({"anime"})
+    first.compare_view.set_background(Background.BLACK)
+    first.compare_view.set_view_mode(ViewMode.MASK)
+    first.close()
+
+    second = MainWindow()
+    qtbot.addWidget(second)
+    assert [preset.name for preset in second.drop_view.selected_presets()] == ["anime"]
+    assert second.compare_view.background() is Background.BLACK
+    assert second.compare_view.view_mode() is ViewMode.MASK
+
+
+def test_all_failed_shows_dialog(monkeypatch, qtbot):
+    from PySide6.QtWidgets import QMessageBox
+
+    errors = []
+    monkeypatch.setattr(QMessageBox, "critical", lambda *args, **kwargs: errors.append(args))
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window._on_compare_finished([None, None])
+
+    assert errors
+
+
+def test_partial_failure_shows_no_dialog(monkeypatch, qtbot):
+    from PySide6.QtWidgets import QMessageBox
+
+    errors = []
+    monkeypatch.setattr(QMessageBox, "critical", lambda *args, **kwargs: errors.append(args))
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    window._on_compare_finished([object(), None])
+
+    assert not errors
+
+
 def test_drop_on_compare_view_previews_instead_of_starting(qtbot, image_file):
     window = MainWindow()
     qtbot.addWidget(window)

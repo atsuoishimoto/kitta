@@ -46,6 +46,9 @@ def main(argv: list[str] | None = None) -> int:
     except CliError as exc:
         print(f"kitta: error: {exc}", file=sys.stderr)
         return 1
+    except KeyboardInterrupt:
+        print("\nkitta: interrupted", file=sys.stderr)
+        return 130
 
 
 # --- kitta IMAGE ---------------------------------------------------------

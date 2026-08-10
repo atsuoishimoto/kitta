@@ -186,6 +186,29 @@ def test_copy_image_and_mask_to_clipboard(view, qapp):
     assert mask.pixelColor(0, 0).red() == 128  # mask gray level
 
 
+def test_cancel_button_lifecycle(view, qtbot):
+    # begin() (in the fixture) marks the run as started
+    assert view._cancel_button.isVisibleTo(view)
+
+    with qtbot.waitSignal(view.cancel_requested, timeout=1000):
+        view._cancel_button.click()
+    assert not view._cancel_button.isEnabled()
+
+    view.set_running(False)
+    assert not view._cancel_button.isVisibleTo(view)
+
+    view.begin(view.source_path, Image.new("RGB", (16, 16)), PRESET_LIST)
+    assert view._cancel_button.isVisibleTo(view)
+    assert view._cancel_button.isEnabled()
+
+
+def test_cancelled_cell_state(view):
+    view.on_model_cancelled(1, PRESET_LIST[1])
+    cell = view.cells[1]
+    assert "Cancelled" in cell.status_label.text()
+    assert not cell.progress_bar.isVisibleTo(view)
+
+
 def test_error_state(view):
     view.on_model_failed(0, PRESET_LIST[0], "download failed")
     assert "download failed" in view.cells[0].status_label.text()

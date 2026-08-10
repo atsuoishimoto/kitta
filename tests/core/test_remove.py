@@ -19,6 +19,20 @@ def test_remove_background_u2netp(sample_image):
 
 
 @pytest.mark.inference
+def test_large_image_keeps_full_resolution(sample_image):
+    from PIL import Image
+
+    from kitta.core.remove import remove_background
+
+    large = sample_image.resize((4200, 320), Image.Resampling.NEAREST)
+
+    result = remove_background(large, PRESETS["fast"])
+
+    assert result.image.size == (4200, 320)
+    assert result.mask.size == (4200, 320)
+
+
+@pytest.mark.inference
 def test_sessions_are_cached(sample_image):
     from kitta.core import remove
 

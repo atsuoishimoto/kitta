@@ -35,6 +35,10 @@ class ChecksumError(ModelStoreError):
     """The downloaded file did not match the expected checksum."""
 
 
+class DownloadCancelled(ModelStoreError):
+    """The download was cancelled; the .part file is kept for resuming."""
+
+
 def model_path(spec: ModelSpec, models_dir: Path | None = None) -> Path:
     directory = models_dir if models_dir is not None else paths.models_dir()
     return directory / spec.filename
@@ -48,18 +52,20 @@ def ensure(
     spec: ModelSpec,
     progress_cb: ProgressCallback | None = None,
     models_dir: Path | None = None,
+    should_cancel: Callable[[], bool] | None = None,
 ) -> Path:
     """Return the local path of the model, downloading it if necessary."""
     dest = model_path(spec, models_dir)
     if dest.exists():
         return dest
-    return download(spec, progress_cb, models_dir)
+    return download(spec, progress_cb, models_dir, should_cancel)
 
 
 def download(
     spec: ModelSpec,
     progress_cb: ProgressCallback | None = None,
     models_dir: Path | None = None,
+    should_cancel: Callable[[], bool] | None = None,
 ) -> Path:
     dest = model_path(spec, models_dir)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -85,6 +91,8 @@ def download(
             if progress_cb:
                 progress_cb(done, total)
             while chunk := response.read(_CHUNK_SIZE):
+                if should_cancel and should_cancel():
+                    raise DownloadCancelled(f"download of {spec.name} cancelled")
                 f.write(chunk)
                 done += len(chunk)
                 if progress_cb:
