@@ -81,7 +81,7 @@ class ResultCell(QFrame):
         layout.addWidget(self.progress_bar)
         layout.addWidget(self.status_label)
 
-        self._update_title()
+        self.set_selected(False)
 
     # --- state changes (driven by worker signals) -------------------------
 
@@ -125,9 +125,9 @@ class ResultCell(QFrame):
 
     def set_selected(self, selected: bool) -> None:
         self.selected = selected
-        self.setStyleSheet(
-            "ResultCell { border: 2px solid palette(highlight); }" if selected else ""
-        )
+        # Same border width in both states so the content area never shifts.
+        color = "palette(highlight)" if selected else "transparent"
+        self.setStyleSheet(f"ResultCell {{ border: 2px solid {color}; }}")
         self._update_title()
 
     def _update_title(self) -> None:
@@ -238,6 +238,17 @@ class CompareView(QWidget):
             self._grid.addWidget(cell, index // GRID_COLUMNS, index % GRID_COLUMNS)
             self._synchronizer.add(cell.view)
             self.cells.append(cell)
+
+        # Distribute space by stretch, not by size hints: a cell's size hint
+        # changes when its style sheet changes (selection), which would
+        # otherwise shrink that column.
+        used_columns = min(len(self.cells), GRID_COLUMNS)
+        used_rows = (len(self.cells) + GRID_COLUMNS - 1) // GRID_COLUMNS
+        for column in range(max(self._grid.columnCount(), used_columns)):
+            self._grid.setColumnStretch(column, 1 if column < used_columns else 0)
+        for row in range(max(self._grid.rowCount(), used_rows)):
+            self._grid.setRowStretch(row, 1 if row < used_rows else 0)
+
         QTimer.singleShot(0, self._synchronizer.fit_all)
 
     # --- worker signal slots ----------------------------------------------

@@ -135,6 +135,39 @@ def test_download_progress(view):
     assert "Downloading" in cell.status_label.text()
 
 
+def test_selection_keeps_cell_widths_equal(qtbot, tmp_path):
+    """Regression: selecting a cell (style sheet change) must not shrink it."""
+    view = CompareView()
+    qtbot.addWidget(view)
+    view.resize(1100, 700)
+    view.show()
+    image = Image.new("RGB", (1080, 1440), "blue")
+    presets = [PRESETS["fast"], PRESETS["general"], PRESETS["fine-detail"]]
+    view.begin(tmp_path / "photo.jpg", image, presets)
+    for index, preset in enumerate(presets):
+        big = Image.new("RGBA", (1080, 1440), (200, 150, 100, 255))
+        view.on_result(
+            index,
+            preset,
+            RemovalResult(
+                image=big,
+                mask=big.getchannel("A"),
+                elapsed=0.5,
+                model_name=preset.model.name,
+                preset_name=preset.name,
+            ),
+        )
+    qtbot.wait(10)
+    before = [cell.width() for cell in view.cells]
+
+    view._on_cell_clicked(view.cells[0])
+    qtbot.wait(10)
+
+    after = [cell.width() for cell in view.cells]
+    assert max(after) - min(after) <= 2
+    assert all(abs(a - b) <= 2 for a, b in zip(after, before, strict=True))
+
+
 def test_zoom_is_synchronized_across_cells(view, qtbot):
     qtbot.wait(10)  # let the fit_all queued by begin() fire first
     before = view.cells[0].view.transform().m11()
