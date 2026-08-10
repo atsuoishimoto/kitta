@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (
     QDialog,
     QMainWindow,
     QMessageBox,
-    QPlainTextEdit,
     QStackedWidget,
+    QTextBrowser,
     QVBoxLayout,
 )
 
@@ -80,9 +80,9 @@ class MainWindow(QMainWindow):
         dialog = QDialog(self)
         dialog.setWindowTitle(self.tr("Third-Party Licenses"))
         dialog.resize(700, 500)
-        text = QPlainTextEdit(dialog)
-        text.setReadOnly(True)
-        text.setPlainText(kitta.notice_text())
+        text = QTextBrowser(dialog)
+        text.setOpenExternalLinks(True)
+        text.setMarkdown(kitta.notice_text())
         layout = QVBoxLayout(dialog)
         layout.addWidget(text)
         dialog.exec()
