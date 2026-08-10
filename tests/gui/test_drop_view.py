@@ -123,6 +123,62 @@ def _center(rect):
     return rect.center().x(), rect.center().y()
 
 
+def test_text_url_is_recognized():
+    from PySide6.QtCore import QMimeData
+
+    from kitta.gui.drop_view import remote_image_url
+
+    mime = QMimeData()
+    mime.setText("https://example.com/a.jpg")
+    assert remote_image_url(mime).toString() == "https://example.com/a.jpg"
+
+    mime = QMimeData()
+    mime.setText("just some text")
+    assert remote_image_url(mime) is None
+
+
+def test_paste_image_from_clipboard(view, tmp_path, monkeypatch, qapp):
+    from PySide6.QtGui import QImage
+
+    from kitta.core import paths
+
+    monkeypatch.setattr(paths, "cache_dir", lambda: tmp_path)
+    image = QImage(24, 16, QImage.Format_RGB32)
+    image.fill(0xFFE0B040)
+    qapp.clipboard().setImage(image)
+
+    view.paste_from_clipboard()
+
+    assert view.selected_path() is not None
+    assert Image.open(view.selected_path()).size == (24, 16)
+
+
+def test_paste_button_pastes(view, tmp_path, monkeypatch, qapp):
+    from PySide6.QtGui import QImage
+
+    from kitta.core import paths
+
+    monkeypatch.setattr(paths, "cache_dir", lambda: tmp_path)
+    image = QImage(10, 10, QImage.Format_RGB32)
+    image.fill(0xFF3060A0)
+    qapp.clipboard().setImage(image)
+
+    view._paste_button.click()
+
+    assert view.selected_path() is not None
+
+
+def test_paste_without_image_shows_info(view, monkeypatch, qapp):
+    infos = []
+    monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: infos.append(args))
+    qapp.clipboard().clear()
+
+    view.paste_from_clipboard()
+
+    assert infos
+    assert view.selected_path() is None
+
+
 def test_initially_no_image_selected(view):
     assert view.selected_path() is None
     assert view._center_stack.currentIndex() == 0  # drop label page

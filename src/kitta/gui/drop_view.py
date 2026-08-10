@@ -14,8 +14,9 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, QRect, Qt, QUrl, Signal
-from PySide6.QtGui import QImage, QPainter, QPalette, QPen, QPixmap
+from PySide6.QtGui import QImage, QKeySequence, QPainter, QPalette, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QFileDialog,
     QHBoxLayout,
@@ -44,9 +45,8 @@ def is_supported_image(path: str | Path) -> bool:
     return Path(path).suffix.lower() in IMAGE_SUFFIXES
 
 
-def dropped_image_path(event) -> str | None:
-    """Return the first supported local file in a drag/drop event."""
-    mime = event.mimeData()
+def local_image_path(mime) -> str | None:
+    """Return the first supported local file in the mime data, if any."""
     if not mime.hasUrls():
         return None
     for url in mime.urls():
@@ -56,37 +56,40 @@ def dropped_image_path(event) -> str | None:
 
 
 def remote_image_url(mime) -> QUrl | None:
-    """Return the first http(s) URL in the mime data, if any."""
-    if not mime.hasUrls():
-        return None
-    for url in mime.urls():
-        if url.scheme() in ("http", "https"):
+    """Return the first http(s) URL in the mime data, if any.
+
+    Also recognizes a plain-text URL (e.g. a copied image address).
+    """
+    if mime.hasUrls():
+        for url in mime.urls():
+            if url.scheme() in ("http", "https"):
+                return url
+    text = (mime.text() or "").strip()
+    if re.fullmatch(r"https?://\S+", text):
+        url = QUrl(text)
+        if url.isValid():
             return url
     return None
 
 
-def accepts_drop(event) -> bool:
-    """A drop is usable with a supported file, raw image data, or a web URL."""
-    mime = event.mimeData()
+def mime_has_image(mime) -> bool:
+    """The mime data carries a supported file, raw image data, or a web URL."""
     return (
-        dropped_image_path(event) is not None
-        or mime.hasImage()
-        or remote_image_url(mime) is not None
+        local_image_path(mime) is not None or mime.hasImage() or remote_image_url(mime) is not None
     )
 
 
-def extract_dropped_image_path(event) -> str | None:
-    """Resolve a drop to a local file path.
+def image_path_from_mime(mime) -> str | None:
+    """Resolve drag/paste mime data to a local file path.
 
     A local file wins; raw image data or a web image URL (browser drags —
     on Windows browsers provide neither a local file nor readable image
     data, only the source URL) is materialized as a file in the cache so
     the rest of the path-based flow works unchanged.
     """
-    path = dropped_image_path(event)
+    path = local_image_path(mime)
     if path is not None:
         return path
-    mime = event.mimeData()
     if mime.hasImage():
         image = QImage(mime.imageData())
         if not image.isNull():
@@ -95,6 +98,14 @@ def extract_dropped_image_path(event) -> str | None:
     if url is not None:
         return _download_dropped_image(url)
     return None
+
+
+def accepts_drop(event) -> bool:
+    return mime_has_image(event.mimeData())
+
+
+def extract_dropped_image_path(event) -> str | None:
+    return image_path_from_mime(event.mimeData())
 
 
 def _download_dropped_image(url: QUrl) -> str | None:
@@ -240,10 +251,22 @@ class DropView(QWidget):
         # page shown while no image is selected
         self._drop_label = DropZoneLabel(self.tr("Drop an image here\nor click to choose a file"))
         self._drop_label.clicked.connect(self._open_file_dialog)
+        paste_key = QKeySequence(QKeySequence.StandardKey.Paste).toString(
+            QKeySequence.SequenceFormat.NativeText
+        )
+        self._paste_button = QPushButton(self.tr("Paste Image ({0})").format(paste_key))
+        self._paste_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._paste_button.clicked.connect(self.paste_from_clipboard)
         drop_page = QWidget()
         drop_layout = QVBoxLayout(drop_page)
         drop_layout.setContentsMargins(48, 24, 48, 24)
         drop_layout.addWidget(self._drop_label)
+        drop_layout.addSpacing(12)
+        drop_layout.addWidget(self._paste_button, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self._paste_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Paste), self)
+        self._paste_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+        self._paste_shortcut.activated.connect(self._on_paste_shortcut)
 
         # page shown once an image is selected
         self._preview_area = PreviewArea()
@@ -319,6 +342,19 @@ class DropView(QWidget):
     def _on_start_clicked(self) -> None:
         if self._selected_path is not None:
             self.start_requested.emit(self._selected_path)
+
+    def paste_from_clipboard(self) -> None:
+        mime = QApplication.clipboard().mimeData()
+        path = image_path_from_mime(mime) if mime is not None else None
+        if path is None:
+            QMessageBox.information(self, self.tr("Kitta"), self.tr("No image in the clipboard."))
+            return
+        self.set_image(path)
+
+    def _on_paste_shortcut(self) -> None:
+        # window-scoped shortcut: act only while the drop screen is shown
+        if self.isVisible():
+            self.paste_from_clipboard()
 
     def _open_file_dialog(self) -> None:
         path, _ = QFileDialog.getOpenFileName(

@@ -158,6 +158,34 @@ def test_save_png_and_mask(monkeypatch, view, tmp_path):
     assert suggested[1].endswith("photo-mask.png")
 
 
+def test_copy_buttons_follow_selection(view):
+    assert not view._copy_button.isEnabled()
+    assert not view._copy_mask_button.isEnabled()
+
+    view.on_result(0, PRESET_LIST[0], fake_result(PRESET_LIST[0]))
+    view._on_cell_clicked(view.cells[0])
+
+    assert view._copy_button.isEnabled()
+    assert view._copy_mask_button.isEnabled()
+
+
+def test_copy_image_and_mask_to_clipboard(view, qapp):
+    view.on_result(0, PRESET_LIST[0], fake_result(PRESET_LIST[0]))
+    view._on_cell_clicked(view.cells[0])
+
+    qapp.clipboard().clear()
+    view.copy_image()
+    copied = qapp.clipboard().image()
+    assert (copied.width(), copied.height()) == (32, 32)
+    assert copied.hasAlphaChannel()
+    assert copied.pixelColor(0, 0).alpha() == 128  # transparency preserved
+
+    view.copy_mask()
+    mask = qapp.clipboard().image()
+    assert (mask.width(), mask.height()) == (32, 32)
+    assert mask.pixelColor(0, 0).red() == 128  # mask gray level
+
+
 def test_error_state(view):
     view.on_model_failed(0, PRESET_LIST[0], "download failed")
     assert "download failed" in view.cells[0].status_label.text()

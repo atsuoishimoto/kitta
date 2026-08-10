@@ -13,6 +13,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QFileDialog,
     QFrame,
@@ -199,18 +200,27 @@ class CompareView(QWidget):
         self._background_buttons[Background.CHECKER].setChecked(True)
 
         self._save_png_button = QPushButton(self.tr("Save PNG"))
-        self._save_png_button.setEnabled(False)
         self._save_png_button.clicked.connect(self.save_png)
         self._save_mask_button = QPushButton(self.tr("Save Mask"))
-        self._save_mask_button.setEnabled(False)
         self._save_mask_button.clicked.connect(self.save_mask)
+        self._copy_button = QPushButton(self.tr("Copy"))
+        self._copy_button.clicked.connect(self.copy_image)
+        self._copy_mask_button = QPushButton(self.tr("Copy Mask"))
+        self._copy_mask_button.clicked.connect(self.copy_mask)
+        self._selection_buttons = (
+            self._save_png_button,
+            self._save_mask_button,
+            self._copy_button,
+            self._copy_mask_button,
+        )
+        for button in self._selection_buttons:
+            button.setEnabled(False)
 
         for button in (
             self._back_button,
             *self._mode_buttons.values(),
             *self._background_buttons.values(),
-            self._save_png_button,
-            self._save_mask_button,
+            *self._selection_buttons,
         ):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -225,6 +235,9 @@ class CompareView(QWidget):
         toolbar.addStretch()
         toolbar.addWidget(self._save_png_button)
         toolbar.addWidget(self._save_mask_button)
+        toolbar.addSpacing(8)
+        toolbar.addWidget(self._copy_button)
+        toolbar.addWidget(self._copy_mask_button)
 
         self._grid_host = QWidget()
         self._grid = QGridLayout(self._grid_host)
@@ -332,14 +345,27 @@ class CompareView(QWidget):
 
     def _update_save_buttons(self) -> None:
         enabled = self._selected_cell is not None
-        self._save_png_button.setEnabled(enabled)
-        self._save_mask_button.setEnabled(enabled)
+        for button in self._selection_buttons:
+            button.setEnabled(enabled)
 
     def save_png(self) -> None:
         self._save(ViewMode.RESULT, "-cutout.png", self.tr("Save PNG"))
 
     def save_mask(self) -> None:
         self._save(ViewMode.MASK, "-mask.png", self.tr("Save Mask"))
+
+    def copy_image(self) -> None:
+        self._copy(ViewMode.RESULT)
+
+    def copy_mask(self) -> None:
+        self._copy(ViewMode.MASK)
+
+    def _copy(self, kind: ViewMode) -> None:
+        result = self.selected_result()
+        if result is None:
+            return
+        image = result.image if kind is ViewMode.RESULT else result.mask
+        QApplication.clipboard().setImage(pil_to_qimage(image))
 
     def _save(self, kind: ViewMode, suffix: str, caption: str) -> None:
         result = self.selected_result()
