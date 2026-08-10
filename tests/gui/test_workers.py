@@ -41,6 +41,13 @@ def worker(monkeypatch, qtbot):
     return CompareWorker(Image.new("RGB", (8, 8)), PRESET_LIST)
 
 
+def test_worker_reserves_a_large_stack(worker):
+    # the default QThread stack is too small for the LLVM code generation
+    # numba does while rembg is imported (crashes the process)
+    assert worker.stackSize() == workers_mod.THREAD_STACK_SIZE
+    assert worker.stackSize() >= 16 * 1024 * 1024
+
+
 def test_worker_emits_lifecycle_signals(worker, qtbot):
     events = []
     worker.model_started.connect(lambda i, p: events.append(("start", i, p.name)))

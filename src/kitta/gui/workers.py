@@ -11,6 +11,13 @@ from PySide6.QtCore import QThread, Signal
 
 from kitta.core.compare import CompareCallbacks, compare
 
+# The first inference imports rembg, which pulls in pymatting -> numba and
+# makes LLVM generate code at import time. LLVM's recursive code generator
+# needs far more stack than the ~512 KB a QThread gets by default, and blows
+# it (SIGBUS / stack overflow, killing the whole process). Only address space
+# is reserved here; pages are committed on demand.
+THREAD_STACK_SIZE = 64 * 1024 * 1024
+
 
 class CompareWorker(QThread):
     """Runs ``core.compare`` over one image in a background thread.
@@ -27,6 +34,7 @@ class CompareWorker(QThread):
 
     def __init__(self, image, presets, parent=None):
         super().__init__(parent)
+        self.setStackSize(THREAD_STACK_SIZE)
         self._image = image
         self._presets = list(presets)
         self._cancelled = False
