@@ -23,6 +23,17 @@ def is_supported_image(path: str | Path) -> bool:
     return Path(path).suffix.lower() in IMAGE_SUFFIXES
 
 
+def dropped_image_path(event) -> str | None:
+    """Return the first supported local file in a drag/drop event."""
+    mime = event.mimeData()
+    if not mime.hasUrls():
+        return None
+    for url in mime.urls():
+        if url.isLocalFile() and is_supported_image(url.toLocalFile()):
+            return url.toLocalFile()
+    return None
+
+
 class DropView(QWidget):
     """Drop an image (or click to pick one) and choose presets to compare."""
 
@@ -74,22 +85,11 @@ class DropView(QWidget):
             self.image_dropped.emit(path)
 
     def dragEnterEvent(self, event) -> None:
-        if self._dropped_path(event) is not None:
+        if dropped_image_path(event) is not None:
             event.acceptProposedAction()
 
     def dropEvent(self, event) -> None:
-        path = self._dropped_path(event)
+        path = dropped_image_path(event)
         if path is not None:
             event.acceptProposedAction()
             self.image_dropped.emit(path)
-
-    @staticmethod
-    def _dropped_path(event) -> str | None:
-        """Return the first supported local file in a drag/drop event."""
-        mime = event.mimeData()
-        if not mime.hasUrls():
-            return None
-        for url in mime.urls():
-            if url.isLocalFile() and is_supported_image(url.toLocalFile()):
-                return url.toLocalFile()
-        return None

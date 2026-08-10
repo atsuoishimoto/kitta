@@ -34,6 +34,7 @@ class MainWindow(QMainWindow):
         self._worker: CompareWorker | None = None
 
         self.drop_view.image_dropped.connect(self.start_compare)
+        self.compare_view.image_dropped.connect(self.start_compare)
         self.compare_view.back_requested.connect(self.show_drop_view)
 
     def show_drop_view(self) -> None:
