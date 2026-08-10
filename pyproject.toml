@@ -1,0 +1,52 @@
+[project]
+name = "kitta"
+version = "0.1.0"
+description = "Compare AI background removal models side by side. Fully offline."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "rembg>=2.0.66",
+    "onnxruntime>=1.19",
+    "pillow>=10.4",
+    # numba (via rembg -> pymatting) does not support the newest numpy yet
+    "numpy>=1.26,<2.3",
+    "tomli-w>=1.0",
+]
+
+[project.optional-dependencies]
+gui = [
+    "PySide6>=6.7",
+]
+
+[project.scripts]
+kitta = "kitta.cli.main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.6",
+]
+
+[tool.uv]
+# Keep the resolver away from ancient numba releases that no longer build
+# (pulled in via rembg -> pymatting).
+constraint-dependencies = ["numba>=0.60"]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not network and not inference'"
+markers = [
+    "network: requires network access (deselected by default)",
+    "inference: runs real model inference (deselected by default)",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
