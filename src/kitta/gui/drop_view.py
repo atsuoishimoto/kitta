@@ -1,15 +1,24 @@
-"""Initial screen: drop target + preset selection (product plan §10)."""
+"""Initial screen: drop target + preset selection (product plan §10).
+
+Choosing an image (drop or file dialog) does not start processing
+immediately: the image is previewed with a Start button, and the
+comparison begins only when Start is pressed.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
+    QPushButton,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -35,17 +44,51 @@ def dropped_image_path(event) -> str | None:
 
 
 class DropView(QWidget):
-    """Drop an image (or click to pick one) and choose presets to compare."""
+    """Pick an image and presets, then press Start to run the comparison."""
 
-    image_dropped = Signal(str)  # path of the dropped/chosen image file
+    start_requested = Signal(str)  # path of the image to process
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
+        self._selected_path: str | None = None
+        self._preview_pixmap: QPixmap | None = None
 
+        self._title_label = QLabel("Kitta")
+        self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._title_label.setStyleSheet("font-size: 28pt; font-weight: bold;")
+        self._tagline_label = QLabel(
+            self.tr("Compare AI background removal models side by side. Fully offline.")
+        )
+        self._tagline_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._tagline_label.setStyleSheet("font-size: 10pt; color: palette(mid);")
+
+        # page shown while no image is selected
         self._drop_label = QLabel(self.tr("Drop an image here\nor click to choose a file"))
         self._drop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._drop_label.setStyleSheet("font-size: 18pt; color: palette(mid);")
+
+        # page shown once an image is selected
+        self._preview_label = QLabel()
+        self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._preview_label.setMinimumSize(200, 150)
+        self._filename_label = QLabel()
+        self._filename_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._filename_label.setStyleSheet("color: palette(mid);")
+        self._start_button = QPushButton(self.tr("Start"))
+        self._start_button.setMinimumWidth(160)
+        self._start_button.setDefault(True)
+        self._start_button.clicked.connect(self._on_start_clicked)
+
+        preview_page = QWidget()
+        preview_layout = QVBoxLayout(preview_page)
+        preview_layout.addWidget(self._preview_label, stretch=1)
+        preview_layout.addWidget(self._filename_label)
+        preview_layout.addWidget(self._start_button, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self._center_stack = QStackedWidget()
+        self._center_stack.addWidget(self._drop_label)
+        self._center_stack.addWidget(preview_page)
 
         self._checkboxes: dict[str, QCheckBox] = {}
         presets_row = QHBoxLayout()
@@ -58,10 +101,31 @@ class DropView(QWidget):
         presets_row.addStretch()
 
         layout = QVBoxLayout(self)
-        layout.addStretch()
-        layout.addWidget(self._drop_label)
-        layout.addStretch()
+        layout.addSpacing(24)
+        layout.addWidget(self._title_label)
+        layout.addWidget(self._tagline_label)
+        layout.addWidget(self._center_stack, stretch=1)
         layout.addLayout(presets_row)
+
+    # --- selection state --------------------------------------------------
+
+    def selected_path(self) -> str | None:
+        return self._selected_path
+
+    def set_image(self, path: str) -> bool:
+        """Preview ``path`` and show the Start button. False if unreadable."""
+        pixmap = QPixmap(path)
+        if pixmap.isNull():
+            QMessageBox.critical(
+                self, self.tr("Kitta"), self.tr("Cannot open image:\n{0}").format(path)
+            )
+            return False
+        self._selected_path = path
+        self._preview_pixmap = pixmap
+        self._filename_label.setText(f"{Path(path).name} ({pixmap.width()}×{pixmap.height()})")
+        self._center_stack.setCurrentIndex(1)
+        self._update_preview()
+        return True
 
     def selected_presets(self) -> list[Preset]:
         return [
@@ -72,7 +136,26 @@ class DropView(QWidget):
         for name, checkbox in self._checkboxes.items():
             checkbox.setChecked(name in names)
 
-    # --- input events ----------------------------------------------------
+    def _on_start_clicked(self) -> None:
+        if self._selected_path is not None:
+            self.start_requested.emit(self._selected_path)
+
+    def _update_preview(self) -> None:
+        if self._preview_pixmap is None:
+            return
+        self._preview_label.setPixmap(
+            self._preview_pixmap.scaled(
+                self._preview_label.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+
+    # --- input events -----------------------------------------------------
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._update_preview()
 
     def mousePressEvent(self, event) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -82,7 +165,7 @@ class DropView(QWidget):
             self.tr("Images (*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff)"),
         )
         if path:
-            self.image_dropped.emit(path)
+            self.set_image(path)
 
     def dragEnterEvent(self, event) -> None:
         if dropped_image_path(event) is not None:
@@ -92,4 +175,4 @@ class DropView(QWidget):
         path = dropped_image_path(event)
         if path is not None:
             event.acceptProposedAction()
-            self.image_dropped.emit(path)
+            self.set_image(path)

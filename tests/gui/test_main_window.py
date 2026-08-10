@@ -36,13 +36,13 @@ def test_load_image(image_file):
     assert image.size == (32, 32)
 
 
-def test_drop_starts_worker_and_switches_view(monkeypatch, qtbot, image_file):
+def test_start_runs_worker_and_switches_view(monkeypatch, qtbot, image_file):
     monkeypatch.setattr(workers_mod, "compare", fake_compare)
     window = MainWindow()
     qtbot.addWidget(window)
     assert window._stack.currentWidget() is window.drop_view
 
-    window.drop_view.image_dropped.emit(str(image_file))
+    window.drop_view.start_requested.emit(str(image_file))
 
     assert window._stack.currentWidget() is window.compare_view
     worker = window._worker
@@ -64,7 +64,7 @@ def test_no_presets_selected_shows_warning(monkeypatch, qtbot, image_file):
     qtbot.addWidget(window)
     window.drop_view.set_selected_presets(())
 
-    window.drop_view.image_dropped.emit(str(image_file))
+    window.drop_view.start_requested.emit(str(image_file))
 
     assert warnings
     assert window._worker is None
@@ -79,3 +79,15 @@ def test_back_returns_to_drop_view(qtbot):
     window.compare_view.back_requested.emit()
 
     assert window._stack.currentWidget() is window.drop_view
+
+
+def test_drop_on_compare_view_previews_instead_of_starting(qtbot, image_file):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window._stack.setCurrentWidget(window.compare_view)
+
+    window.compare_view.image_dropped.emit(str(image_file))
+
+    assert window._stack.currentWidget() is window.drop_view
+    assert window.drop_view.selected_path() == str(image_file)
+    assert window._worker is None

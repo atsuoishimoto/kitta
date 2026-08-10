@@ -33,12 +33,17 @@ class MainWindow(QMainWindow):
 
         self._worker: CompareWorker | None = None
 
-        self.drop_view.image_dropped.connect(self.start_compare)
-        self.compare_view.image_dropped.connect(self.start_compare)
+        self.drop_view.start_requested.connect(self.start_compare)
+        self.compare_view.image_dropped.connect(self._on_new_image_dropped)
         self.compare_view.back_requested.connect(self.show_drop_view)
 
     def show_drop_view(self) -> None:
         self._stack.setCurrentWidget(self.drop_view)
+
+    def _on_new_image_dropped(self, path: str) -> None:
+        """A new image dropped on the compare screen: preview it first."""
+        self.show_drop_view()
+        self.drop_view.set_image(path)
 
     def start_compare(self, path: str) -> None:
         if self._worker is not None and self._worker.isRunning():
