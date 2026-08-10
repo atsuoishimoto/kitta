@@ -33,6 +33,9 @@ from kitta.core.models import DEFAULT_PRESET_NAMES, PRESETS, Preset
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 
+# secondary (gray) text color, dark enough to stay readable
+SECONDARY_TEXT_COLOR = "#505050"
+
 DOWNLOAD_TIMEOUT = 10  # seconds
 MAX_DOWNLOAD_SIZE = 64 * 1024 * 1024  # bytes
 
@@ -138,9 +141,9 @@ class DropZoneLabel(QLabel):
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet(
-            "DropZoneLabel { font-size: 18pt; color: palette(mid);"
-            " border: 2px dashed transparent; border-radius: 8px; }"
-            " DropZoneLabel:hover { border-color: palette(mid); }"
+            f"DropZoneLabel {{ font-size: 18pt; color: {SECONDARY_TEXT_COLOR};"
+            f" border: 2px dashed transparent; border-radius: 8px; }}"
+            f" DropZoneLabel:hover {{ border-color: palette(mid); }}"
         )
 
     def mousePressEvent(self, event) -> None:
@@ -229,7 +232,7 @@ class DropView(QWidget):
             self.tr("Compare AI background removal models side by side. Fully offline.")
         )
         self._tagline_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._tagline_label.setStyleSheet("font-size: 10pt; color: palette(mid);")
+        self._tagline_label.setStyleSheet(f"font-size: 10pt; color: {SECONDARY_TEXT_COLOR};")
 
         # page shown while no image is selected
         self._drop_label = DropZoneLabel(self.tr("Drop an image here\nor click to choose a file"))
@@ -244,7 +247,7 @@ class DropView(QWidget):
         self._preview_area.clicked.connect(self._open_file_dialog)
         self._filename_label = QLabel()
         self._filename_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._filename_label.setStyleSheet("color: palette(mid);")
+        self._filename_label.setStyleSheet(f"color: {SECONDARY_TEXT_COLOR};")
         self._start_button = QPushButton(self.tr("Start"))
         self._start_button.setMinimumWidth(160)
         self._start_button.setDefault(True)
@@ -259,6 +262,10 @@ class DropView(QWidget):
         self._center_stack = QStackedWidget()
         self._center_stack.addWidget(drop_page)
         self._center_stack.addWidget(preview_page)
+
+        self._models_label = QLabel(self.tr("Select AI models to compare"))
+        self._models_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._models_label.setStyleSheet(f"color: {SECONDARY_TEXT_COLOR};")
 
         self._checkboxes: dict[str, QCheckBox] = {}
         presets_row = QHBoxLayout()
@@ -275,6 +282,7 @@ class DropView(QWidget):
         layout.addWidget(self._title_label)
         layout.addWidget(self._tagline_label)
         layout.addWidget(self._center_stack, stretch=1)
+        layout.addWidget(self._models_label)
         layout.addLayout(presets_row)
 
     # --- selection state --------------------------------------------------
