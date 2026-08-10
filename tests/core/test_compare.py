@@ -1,3 +1,5 @@
+import threading
+
 import pytest
 from PIL import Image
 
@@ -82,6 +84,51 @@ def test_compare_reports_errors_and_continues(monkeypatch, no_download, sample_i
     assert results[0] is None
     assert results[1].preset_name == "balanced"
     assert errors == [(0, "fast", "boom")]
+
+
+def test_cached_presets_run_before_downloads(monkeypatch, sample_image):
+    fast, balanced = PRESETS["fast"], PRESETS["balanced"]
+    # balanced is cached; fast needs a (slow) download
+    monkeypatch.setattr(compare_mod.model_store, "is_available", lambda spec: spec.name != "u2netp")
+    release_download = threading.Event()
+
+    def fake_ensure(spec, progress_cb=None):
+        assert release_download.wait(5)
+
+    monkeypatch.setattr(compare_mod.model_store, "ensure", fake_ensure)
+    monkeypatch.setattr(compare_mod, "remove_background", lambda image, preset: fake_result(preset))
+    events = []
+
+    def on_result(index, preset, result):
+        events.append(("result", index, preset.name))
+        if preset.name == "balanced":
+            # let the download finish only after the cached preset ran
+            release_download.set()
+
+    results = compare(sample_image, [fast, balanced], CompareCallbacks(on_result=on_result))
+
+    assert events == [("result", 1, "balanced"), ("result", 0, "fast")]
+    assert results[0].preset_name == "fast"
+    assert results[1].preset_name == "balanced"
+
+
+def test_download_failure_is_reported_and_others_continue(monkeypatch, sample_image):
+    monkeypatch.setattr(compare_mod.model_store, "is_available", lambda spec: False)
+
+    def fake_ensure(spec, progress_cb=None):
+        if spec.name == "u2netp":
+            raise RuntimeError("network down")
+
+    monkeypatch.setattr(compare_mod.model_store, "ensure", fake_ensure)
+    monkeypatch.setattr(compare_mod, "remove_background", lambda image, preset: fake_result(preset))
+    errors = []
+    callbacks = CompareCallbacks(on_error=lambda i, p, exc: errors.append((i, p.name, str(exc))))
+
+    results = compare(sample_image, PRESET_LIST, callbacks)
+
+    assert results[0] is None
+    assert results[1].preset_name == "balanced"
+    assert errors == [(0, "fast", "network down")]
 
 
 def test_compare_raises_without_error_callback(monkeypatch, no_download, sample_image):
