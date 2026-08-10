@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 from PySide6.QtCore import QSettings
+from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import (
     QDialog,
     QMainWindow,
@@ -59,6 +60,8 @@ class MainWindow(QMainWindow):
         help_menu = self.menuBar().addMenu(self.tr("&Help"))
         self.about_action = help_menu.addAction(self.tr("&About Kitta"))
         self.about_action.triggered.connect(self._show_about)
+        self.license_action = help_menu.addAction(self.tr("&Kitta License"))
+        self.license_action.triggered.connect(self._show_license)
         self.licenses_action = help_menu.addAction(self.tr("Third-Party &Licenses"))
         self.licenses_action.triggered.connect(self._show_licenses)
 
@@ -76,13 +79,24 @@ class MainWindow(QMainWindow):
             ).format(kitta.__version__),
         )
 
+    def _show_license(self) -> None:
+        text = QTextBrowser()
+        # the GPL text is pre-wrapped and indented: keep it as authored
+        text.setLineWrapMode(QTextBrowser.LineWrapMode.NoWrap)
+        text.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+        text.setPlainText(kitta.license_text())
+        self._show_text_dialog(self.tr("License"), text)
+
     def _show_licenses(self) -> None:
-        dialog = QDialog(self)
-        dialog.setWindowTitle(self.tr("Third-Party Licenses"))
-        dialog.resize(700, 500)
-        text = QTextBrowser(dialog)
+        text = QTextBrowser()
         text.setOpenExternalLinks(True)
         text.setMarkdown(kitta.notice_text())
+        self._show_text_dialog(self.tr("Third-Party Licenses"), text)
+
+    def _show_text_dialog(self, title: str, text: QTextBrowser) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.resize(700, 500)
         layout = QVBoxLayout(dialog)
         layout.addWidget(text)
         dialog.exec()

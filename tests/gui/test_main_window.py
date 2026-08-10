@@ -145,6 +145,24 @@ def test_help_menu_about_and_licenses(monkeypatch, qtbot):
     assert dialogs
 
 
+def test_help_menu_shows_the_gpl_text(monkeypatch, qtbot):
+    import kitta
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    from PySide6.QtWidgets import QDialog, QTextBrowser
+
+    dialogs = []
+    monkeypatch.setattr(QDialog, "exec", lambda self: dialogs.append(self))
+    window.license_action.trigger()
+
+    assert len(dialogs) == 1
+    browser = dialogs[0].findChild(QTextBrowser)
+    assert browser.toPlainText() == kitta.license_text()
+    assert "GNU GENERAL PUBLIC LICENSE" in browser.toPlainText()
+
+
 def test_drop_on_compare_view_previews_instead_of_starting(qtbot, image_file):
     window = MainWindow()
     qtbot.addWidget(window)
