@@ -49,6 +49,8 @@ def pil_to_qimage(image) -> QImage:
 
 
 class ResultCell(QFrame):
+    """One grid cell; ``preset=None`` makes it the always-original cell."""
+
     clicked = Signal(object)  # self
 
     def __init__(self, preset, original_pixmap: QPixmap, parent=None):
@@ -60,8 +62,9 @@ class ResultCell(QFrame):
         self._displayed: ViewMode = ViewMode.ORIGINAL
 
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        # clicking a cell selects it; the image view keeps its pan cursor
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        if preset is not None:
+            # clicking a cell selects it; the image view keeps its pan cursor
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self.title_label = QLabel()
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -70,7 +73,7 @@ class ResultCell(QFrame):
         self.view.set_pixmap(original_pixmap)
         self.view.clicked.connect(lambda: self.clicked.emit(self))
 
-        self.status_label = QLabel(self.tr("Waiting..."))
+        self.status_label = QLabel(self.tr("Waiting...") if preset is not None else "")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -133,6 +136,9 @@ class ResultCell(QFrame):
         self._update_title()
 
     def _update_title(self) -> None:
+        if self.preset is None:
+            self.title_label.setText(self.tr("Original"))
+            return
         star = "★ " if self.selected else ""
         self.title_label.setText(f"{star}{self.preset.display_name} ({self.preset.model.name})")
 
@@ -150,6 +156,7 @@ class CompareView(QWidget):
         self.setAcceptDrops(True)
         self.source_path: Path | None = None
         self.cells: list[ResultCell] = []
+        self.original_cell: ResultCell | None = None
         self._synchronizer = ViewSynchronizer()
         self._selected_cell: ResultCell | None = None
         self._view_mode = ViewMode.RESULT
@@ -160,7 +167,6 @@ class CompareView(QWidget):
 
         self._mode_group = QButtonGroup(self)
         mode_buttons = [
-            (ViewMode.ORIGINAL, self.tr("Original")),
             (ViewMode.MASK, self.tr("Mask")),
             (ViewMode.RESULT, self.tr("Result")),
         ]
@@ -232,29 +238,39 @@ class CompareView(QWidget):
     def begin(self, source_path: Path, image, presets) -> None:
         """Reset the grid for a new comparison run."""
         self.source_path = Path(source_path)
-        for cell in self.cells:
-            self._grid.removeWidget(cell)
-            cell.deleteLater()
+        for cell in [*self.cells, self.original_cell]:
+            if cell is not None:
+                self._grid.removeWidget(cell)
+                cell.deleteLater()
         self.cells = []
         self._synchronizer = ViewSynchronizer()
         self._selected_cell = None
         self._update_save_buttons()
 
         original = QPixmap.fromImage(pil_to_qimage(image))
+
+        # the original image always occupies the first grid slot
+        self.original_cell = ResultCell(None, original)
+        self.original_cell.view.set_background(self._current_background())
+        self._grid.addWidget(self.original_cell, 0, 0)
+        self._synchronizer.add(self.original_cell.view)
+
         for index, preset in enumerate(presets):
             cell = ResultCell(preset, original)
             cell.clicked.connect(self._on_cell_clicked)
             cell.view.set_background(self._current_background())
             cell.set_view_mode(self._view_mode)
-            self._grid.addWidget(cell, index // GRID_COLUMNS, index % GRID_COLUMNS)
+            position = index + 1
+            self._grid.addWidget(cell, position // GRID_COLUMNS, position % GRID_COLUMNS)
             self._synchronizer.add(cell.view)
             self.cells.append(cell)
 
         # Distribute space by stretch, not by size hints: a cell's size hint
         # changes when its style sheet changes (selection), which would
         # otherwise shrink that column.
-        used_columns = min(len(self.cells), GRID_COLUMNS)
-        used_rows = (len(self.cells) + GRID_COLUMNS - 1) // GRID_COLUMNS
+        total_cells = len(self.cells) + 1
+        used_columns = min(total_cells, GRID_COLUMNS)
+        used_rows = (total_cells + GRID_COLUMNS - 1) // GRID_COLUMNS
         for column in range(max(self._grid.columnCount(), used_columns)):
             self._grid.setColumnStretch(column, 1 if column < used_columns else 0)
         for row in range(max(self._grid.rowCount(), used_rows)):
@@ -280,7 +296,8 @@ class CompareView(QWidget):
 
     def set_view_mode(self, mode: ViewMode) -> None:
         self._view_mode = mode
-        self._mode_buttons[mode].setChecked(True)
+        if mode in self._mode_buttons:
+            self._mode_buttons[mode].setChecked(True)
         for cell in self.cells:
             cell.set_view_mode(mode)
 
@@ -291,6 +308,8 @@ class CompareView(QWidget):
         self._background_buttons[background].setChecked(True)
         for cell in self.cells:
             cell.view.set_background(background)
+        if self.original_cell is not None:
+            self.original_cell.view.set_background(background)
 
     def _current_background(self) -> Background:
         for background, button in self._background_buttons.items():

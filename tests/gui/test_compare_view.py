@@ -46,6 +46,8 @@ def test_clickables_use_pointing_hand_cursor(view):
         assert cell.cursor().shape() == hand
         # the image area keeps its pan (open hand) cursor
         assert cell.view.viewport().cursor().shape() == Qt.CursorShape.OpenHandCursor
+    # the original cell is not clickable
+    assert view.original_cell.cursor().shape() != hand
 
 
 def test_begin_creates_cells_showing_original(view):
@@ -53,6 +55,14 @@ def test_begin_creates_cells_showing_original(view):
     assert view.view_mode() is ViewMode.RESULT
     for cell in view.cells:
         assert cell.displayed_mode() is ViewMode.ORIGINAL  # no result yet
+    assert view.original_cell is not None
+    assert "Original" in view.original_cell.title_label.text()
+    assert view.original_cell.displayed_mode() is ViewMode.ORIGINAL
+    assert view._grid.itemAtPosition(0, 0).widget() is view.original_cell
+
+
+def test_no_original_mode_button(view):
+    assert set(view._mode_buttons) == {ViewMode.MASK, ViewMode.RESULT}
 
 
 def test_result_display_and_mode_switch(view):
@@ -65,9 +75,21 @@ def test_result_display_and_mode_switch(view):
     view.set_view_mode(ViewMode.MASK)
     assert view.cells[0].displayed_mode() is ViewMode.MASK
     assert view.cells[1].displayed_mode() is ViewMode.ORIGINAL
+    # the original cell is unaffected by the view mode
+    assert view.original_cell.displayed_mode() is ViewMode.ORIGINAL
 
-    view.set_view_mode(ViewMode.ORIGINAL)
-    assert all(cell.displayed_mode() is ViewMode.ORIGINAL for cell in view.cells)
+
+def test_original_cell_is_not_selectable(view):
+    view._on_cell_clicked(view.original_cell)
+    assert view.selected_result() is None
+    assert not view.original_cell.selected
+    assert not view._save_png_button.isEnabled()
+
+
+def test_original_cell_is_synchronized(view, qtbot):
+    qtbot.wait(10)  # let the fit_all queued by begin() fire first
+    view.original_cell.view.zoom(2.0)
+    assert view.cells[0].view.transform() == view.original_cell.view.transform()
 
 
 def test_late_result_respects_current_mode(view):
@@ -79,6 +101,7 @@ def test_late_result_respects_current_mode(view):
 def test_background_switch_applies_to_all_cells(view):
     view.set_background(Background.BLACK)
     assert all(cell.view.background() is Background.BLACK for cell in view.cells)
+    assert view.original_cell.view.background() is Background.BLACK
 
 
 def test_new_cells_inherit_background(qtbot, tmp_path, sample_image):
