@@ -99,13 +99,16 @@ def extract_dropped_image_path(event) -> str | None:
 
 def _download_dropped_image(url: QUrl) -> str | None:
     """Fetch a dragged web image and materialize it in the cache."""
+    # urllib needs the percent-encoded (ASCII) form; toString() would give
+    # the decoded form and crash on non-ASCII path components.
+    encoded_url = bytes(url.toEncoded()).decode("ascii")
     request = urllib.request.Request(
-        url.toString(), headers={"User-Agent": f"Kitta/{kitta.__version__}"}
+        encoded_url, headers={"User-Agent": f"Kitta/{kitta.__version__}"}
     )
     try:
         with urllib.request.urlopen(request, timeout=DOWNLOAD_TIMEOUT) as response:
             data = response.read(MAX_DOWNLOAD_SIZE + 1)
-    except OSError:
+    except (OSError, ValueError):
         return None
     if len(data) > MAX_DOWNLOAD_SIZE:
         return None

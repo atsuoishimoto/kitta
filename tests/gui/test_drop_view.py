@@ -309,6 +309,31 @@ def test_remote_url_drop_downloads_image(qtbot, tmp_path, monkeypatch):
     assert Image.open(path).size == (20, 10)
 
 
+def test_remote_url_with_non_ascii_path(qtbot, tmp_path, monkeypatch):
+    import urllib.request
+
+    from kitta.core import paths
+    from kitta.gui.drop_view import extract_dropped_image_path
+
+    monkeypatch.setattr(paths, "cache_dir", lambda: tmp_path)
+    requests = []
+
+    def fake_urlopen(request, timeout=None):
+        requests.append(request.full_url)
+        return FakeResponse(png_bytes())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    path = extract_dropped_image_path(
+        FakeDropEvent(make_remote_mime("https://example.com/画像/猫の写真.jpg"))
+    )
+
+    assert path is not None
+    assert len(requests) == 1
+    assert requests[0].isascii()  # percent-encoded for urllib
+    assert "%E7%8C%AB" in requests[0]  # 猫
+
+
 def test_remote_url_download_failure(qtbot, tmp_path, monkeypatch):
     import urllib.error
     import urllib.request
