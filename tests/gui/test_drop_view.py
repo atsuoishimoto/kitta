@@ -168,6 +168,21 @@ def test_paste_button_pastes(view, tmp_path, monkeypatch, qapp):
     assert view.selected_path() is not None
 
 
+def test_paste_button_tracks_clipboard(view, qtbot, qapp):
+    from PySide6.QtGui import QImage
+
+    qapp.clipboard().clear()
+    qtbot.waitUntil(lambda: not view._paste_button.isEnabled(), timeout=2000)
+
+    image = QImage(8, 8, QImage.Format_RGB32)
+    image.fill(0xFF000000)
+    qapp.clipboard().setImage(image)
+    qtbot.waitUntil(view._paste_button.isEnabled, timeout=2000)
+
+    qapp.clipboard().clear()
+    qtbot.waitUntil(lambda: not view._paste_button.isEnabled(), timeout=2000)
+
+
 def test_paste_without_image_shows_info(view, monkeypatch, qapp):
     infos = []
     monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: infos.append(args))

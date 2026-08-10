@@ -268,6 +268,9 @@ class DropView(QWidget):
         self._paste_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
         self._paste_shortcut.activated.connect(self._on_paste_shortcut)
 
+        QApplication.clipboard().dataChanged.connect(self._update_paste_button)
+        self._update_paste_button()
+
         # page shown once an image is selected
         self._preview_area = PreviewArea()
         self._preview_area.clicked.connect(self._open_file_dialog)
@@ -351,9 +354,13 @@ class DropView(QWidget):
             return
         self.set_image(path)
 
+    def _update_paste_button(self) -> None:
+        mime = QApplication.clipboard().mimeData()
+        self._paste_button.setEnabled(mime is not None and mime_has_image(mime))
+
     def _on_paste_shortcut(self) -> None:
         # window-scoped shortcut: act only while the drop screen is shown
-        if self.isVisible():
+        if self.isVisible() and self._paste_button.isEnabled():
             self.paste_from_clipboard()
 
     def _open_file_dialog(self) -> None:
