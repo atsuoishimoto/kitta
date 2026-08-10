@@ -160,3 +160,116 @@ def test_drop_event_with_image_data_shows_preview(view, tmp_path, monkeypatch):
     assert event.accepted
     assert view.selected_path() is not None
     assert view._center_stack.currentIndex() == 1
+
+
+def make_remote_mime(url="https://example.com/photos/Cat_poster_1.jpg?x=1"):
+    from PySide6.QtCore import QMimeData, QUrl
+
+    mime = QMimeData()
+    mime.setUrls([QUrl(url)])
+    return mime
+
+
+def png_bytes():
+    import io
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (20, 10), "green").save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+class FakeResponse:
+    def __init__(self, body):
+        self._body = body
+
+    def read(self, size=-1):
+        return self._body[:size] if size >= 0 else self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_accepts_drop_with_remote_url(qtbot):
+    from kitta.gui.drop_view import accepts_drop
+
+    assert accepts_drop(FakeDropEvent(make_remote_mime()))
+
+
+def test_remote_url_drop_downloads_image(qtbot, tmp_path, monkeypatch):
+    import urllib.request
+
+    from kitta.core import paths
+    from kitta.gui.drop_view import extract_dropped_image_path
+
+    monkeypatch.setattr(paths, "cache_dir", lambda: tmp_path)
+    requests = []
+
+    def fake_urlopen(request, timeout=None):
+        requests.append(request.full_url)
+        return FakeResponse(png_bytes())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    path = extract_dropped_image_path(FakeDropEvent(make_remote_mime()))
+
+    assert requests == ["https://example.com/photos/Cat_poster_1.jpg?x=1"]
+    assert path is not None
+    assert path.endswith("Cat_poster_1.png")
+    assert Image.open(path).size == (20, 10)
+
+
+def test_remote_url_download_failure(qtbot, tmp_path, monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    from kitta.core import paths
+    from kitta.gui.drop_view import extract_dropped_image_path
+
+    monkeypatch.setattr(paths, "cache_dir", lambda: tmp_path)
+
+    def fake_urlopen(request, timeout=None):
+        raise urllib.error.URLError("offline")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    assert extract_dropped_image_path(FakeDropEvent(make_remote_mime())) is None
+
+
+def test_remote_url_non_image_content(qtbot, tmp_path, monkeypatch):
+    import urllib.request
+
+    from kitta.core import paths
+    from kitta.gui.drop_view import extract_dropped_image_path
+
+    monkeypatch.setattr(paths, "cache_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        urllib.request, "urlopen", lambda request, timeout=None: FakeResponse(b"<html>nope</html>")
+    )
+
+    assert extract_dropped_image_path(FakeDropEvent(make_remote_mime())) is None
+
+
+def test_drop_event_shows_error_when_download_fails(view, tmp_path, monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    from kitta.core import paths
+
+    monkeypatch.setattr(paths, "cache_dir", lambda: tmp_path)
+
+    def fake_urlopen(request, timeout=None):
+        raise urllib.error.URLError("offline")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    errors = []
+    monkeypatch.setattr(QMessageBox, "critical", lambda *args, **kwargs: errors.append(args))
+    event = FakeDropEvent(make_remote_mime())
+
+    view.dropEvent(event)
+
+    assert event.accepted
+    assert errors
+    assert view.selected_path() is None

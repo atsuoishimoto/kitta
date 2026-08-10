@@ -336,7 +336,13 @@ class CompareView(QWidget):
             event.acceptProposedAction()
 
     def dropEvent(self, event) -> None:
+        if not accepts_drop(event):
+            return
+        event.acceptProposedAction()
         path = extract_dropped_image_path(event)
-        if path is not None:
-            event.acceptProposedAction()
-            self.image_dropped.emit(path)
+        if path is None:
+            QMessageBox.critical(
+                self, self.tr("Kitta"), self.tr("Could not retrieve the dropped image.")
+            )
+            return
+        self.image_dropped.emit(path)

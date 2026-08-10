@@ -8,10 +8,12 @@ comparison begins only when Start is pressed.
 from __future__ import annotations
 
 import itertools
+import re
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -25,10 +27,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+import kitta
 from kitta.core import paths
 from kitta.core.models import DEFAULT_PRESET_NAMES, PRESETS, Preset
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
+
+DOWNLOAD_TIMEOUT = 10  # seconds
+MAX_DOWNLOAD_SIZE = 64 * 1024 * 1024  # bytes
 
 
 def is_supported_image(path: str | Path) -> bool:
@@ -46,17 +52,33 @@ def dropped_image_path(event) -> str | None:
     return None
 
 
+def remote_image_url(mime) -> QUrl | None:
+    """Return the first http(s) URL in the mime data, if any."""
+    if not mime.hasUrls():
+        return None
+    for url in mime.urls():
+        if url.scheme() in ("http", "https"):
+            return url
+    return None
+
+
 def accepts_drop(event) -> bool:
-    """A drop is usable if it carries a supported file or raw image data."""
-    return dropped_image_path(event) is not None or event.mimeData().hasImage()
+    """A drop is usable with a supported file, raw image data, or a web URL."""
+    mime = event.mimeData()
+    return (
+        dropped_image_path(event) is not None
+        or mime.hasImage()
+        or remote_image_url(mime) is not None
+    )
 
 
 def extract_dropped_image_path(event) -> str | None:
     """Resolve a drop to a local file path.
 
-    A local file wins; otherwise raw image data (e.g. an image dragged
-    out of a browser) is materialized as a PNG in the cache so the rest
-    of the path-based flow works unchanged.
+    A local file wins; raw image data or a web image URL (browser drags —
+    on Windows browsers provide neither a local file nor readable image
+    data, only the source URL) is materialized as a file in the cache so
+    the rest of the path-based flow works unchanged.
     """
     path = dropped_image_path(event)
     if path is not None:
@@ -66,16 +88,39 @@ def extract_dropped_image_path(event) -> str | None:
         image = QImage(mime.imageData())
         if not image.isNull():
             return _save_dropped_image(image)
+    url = remote_image_url(mime)
+    if url is not None:
+        return _download_dropped_image(url)
     return None
 
 
-def _save_dropped_image(image: QImage) -> str | None:
+def _download_dropped_image(url: QUrl) -> str | None:
+    """Fetch a dragged web image and materialize it in the cache."""
+    request = urllib.request.Request(
+        url.toString(), headers={"User-Agent": f"Kitta/{kitta.__version__}"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=DOWNLOAD_TIMEOUT) as response:
+            data = response.read(MAX_DOWNLOAD_SIZE + 1)
+    except OSError:
+        return None
+    if len(data) > MAX_DOWNLOAD_SIZE:
+        return None
+    image = QImage.fromData(data)
+    if image.isNull():
+        return None
+    stem = re.sub(r"[^A-Za-z0-9._-]", "_", Path(url.fileName()).stem)[:60]
+    return _save_dropped_image(image, stem or None)
+
+
+def _save_dropped_image(image: QImage, stem: str | None = None) -> str | None:
     directory = paths.cache_dir() / "dropped"
     directory.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    if stem is None:
+        stem = datetime.now().strftime("dropped-%Y%m%d-%H%M%S")
     for counter in itertools.count():
         suffix = "" if counter == 0 else f"-{counter}"
-        path = directory / f"dropped-{stamp}{suffix}.png"
+        path = directory / f"{stem}{suffix}.png"
         if not path.exists():
             break
     if not image.save(str(path), "PNG"):
@@ -212,7 +257,13 @@ class DropView(QWidget):
             event.acceptProposedAction()
 
     def dropEvent(self, event) -> None:
+        if not accepts_drop(event):
+            return
+        event.acceptProposedAction()
         path = extract_dropped_image_path(event)
-        if path is not None:
-            event.acceptProposedAction()
-            self.set_image(path)
+        if path is None:
+            QMessageBox.critical(
+                self, self.tr("Kitta"), self.tr("Could not retrieve the dropped image.")
+            )
+            return
+        self.set_image(path)
