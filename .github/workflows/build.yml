@@ -36,12 +36,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Check release exists
+        run: gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}"
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
-        with:
-          draft: true
-          files: dist/**
+      - name: Upload assets (overwrite)
+        run: gh release upload "${{ github.ref_name }}" dist/* --clobber --repo "${{ github.repository }}"
