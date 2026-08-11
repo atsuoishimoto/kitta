@@ -7,12 +7,10 @@ license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
-    "rembg>=2.0.66",
-    "onnxruntime>=1.19",
     # 11.3 is the first release whose wheels can decode AVIF (Qt cannot)
     "pillow>=11.3",
-    # numba (via rembg -> pymatting) does not support the newest numpy yet
-    "numpy>=1.26,<2.3",
+    "rembg-directml[cpu,cli]>=1.1.0 ; sys_platform != 'win32'",
+    "rembg-directml[dml,cli]>=1.1.0 ; sys_platform == 'win32'",
     "tomli-w>=1.0",
 ]
 
@@ -34,10 +32,6 @@ dev = [
     "ruff>=0.6",
 ]
 
-[tool.uv]
-# Keep the resolver away from ancient numba releases that no longer build
-# (pulled in via rembg -> pymatting).
-constraint-dependencies = ["numba>=0.60"]
 
 [tool.pyappdist]
 name = "Kitta"
