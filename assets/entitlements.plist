@@ -1,13 +1,43 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime entitlements for the signed macOS bundle
+  (pyproject.toml: [[tool.pyappdist.targets]] name = "macos").
+
+  Why this file exists (2026-08-12): the GHA-built, notarized .pkg crashed the
+  moment background removal started (drop an image -> Start). The crash report
+  (~/Library/Logs/DiagnosticReports/python3.12-*.ips) showed:
+
+      exception:   EXC_BAD_ACCESS / SIGKILL (Code Signature Invalid)
+      termination: namespace CODESIGNING, "Invalid Page"
+      stack:       libllvmlite.dylib LLVMPY_TryAllocateExecutableMemory
+                   -> llvm::sys::Memory::protectMappedMemory
+                   -> sys_icache_invalidate  (worker thread "CompareWorker")
+
+  numba/llvmlite JIT-compiles at runtime with plain mmap(PROT_EXEC) (no
+  MAP_JIT). Notarization requires signing with the hardened runtime
+  ("codesign - -options runtime"), which forbids unsigned executable memory:
+  the kernel SIGKILLs the process on the first such page. Not a bug in the
+  app - the hardened runtime working as designed, until the entitlements
+  below opt out:
+
+    - allow-unsigned-executable-memory: the one llvmlite actually needs
+      (classic mmap(PROT_EXEC) JIT).
+    - allow-jit: allows MAP_JIT; included as the standard pairing for
+      numba apps (matches PyInstaller's recommendation).
+
+  This plist REPLACES pyappdist's built-in default (which is only
+  disable-library-validation), so that key must stay: without it the
+  hardened python cannot load third-party wheels' .so/.dylib files, which
+  are signed ad-hoc or by other identities.
+
+  All three are permitted for Developer ID distribution and pass
+  notarization without extra approval.
+-->
 <plist version="1.0">
 <dict>
-    <!-- Replaces pyappdist's default plist, so keep disable-library-validation:
-         without it the hardened python can't load third-party wheels' .so files. -->
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
-    <!-- numba/llvmlite JIT-compiles with plain mmap(PROT_EXEC); the hardened
-         runtime SIGKILLs that without these two. -->
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
     <key>com.apple.security.cs.allow-jit</key>
