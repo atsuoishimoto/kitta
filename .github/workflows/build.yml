@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     strategy:
+      # A failing cell (e.g. macOS missing its signing secrets) must not cancel
+      # the other builds.
       fail-fast: false
       matrix:
         include:
@@ -24,11 +26,6 @@ jobs:
     # macOS cell enters it (an empty environment = none), so Windows/Linux runs
     # never touch it.
     environment: ${{ startsWith(matrix.os, 'macos') && 'sign_macos' || '' }}
-    # Lifted to job level so the macOS signing step's `if` can test it — the
-    # `secrets` context is not available in a step-level `if`, but `env` is.
-    env:
-      MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
-      MACOS_INSTALLER_CERTIFICATE_P12: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_P12 }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
@@ -43,8 +40,10 @@ jobs:
           wix extension add -g WixToolset.UI.wixext/5.0.2
 
       # --- macOS code-signing + notarization --------------------------------
-      # Skipped automatically if the secrets below are empty, so forks without
-      # an Apple Developer account still build (unsigned, unnotarized).
+      # All secrets below are required (checked first thing); a missing one
+      # fails this cell — the other matrix cells keep building (fail-fast off).
+      # Secrets are referenced only in this macOS-only step, never on the
+      # Windows/Linux cells.
       #
       # Required GitHub Actions secrets (in the `sign_macos` environment):
       #
@@ -57,13 +56,12 @@ jobs:
       #     The identity's full name, e.g.
       #     "Developer ID Application: Your Name (TEAMID)".
       #
-      # For the pkg format — a .pkg is signed with a different certificate type
-      # ("Developer ID Installer") than the .app bundles inside it. Without
-      # these the .pkg still builds, but is left unsigned and not notarized:
-      #
       #   MACOS_INSTALLER_CERTIFICATE_P12
       #   MACOS_INSTALLER_CERTIFICATE_PASSWORD
       #   MACOS_INSTALLER_IDENTITY
+      #     Same three for the "Developer ID Installer" certificate — a .pkg is
+      #     signed with a different certificate type than the .app bundles
+      #     inside it, and needs both to be notarized.
       #     e.g. "Developer ID Installer: Your Name (TEAMID)".
       #
       #   MACOS_NOTARY_APPLE_ID
@@ -76,21 +74,42 @@ jobs:
       # The temporary keychain's password is generated fresh each run below, so
       # it is deliberately NOT a secret.
       - name: Set up macOS signing
-        if: runner.os == 'macOS' && env.MACOS_CERTIFICATE_P12 != ''
+        if: runner.os == 'macOS'
         env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          MACOS_INSTALLER_CERTIFICATE_P12: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_P12 }}
           MACOS_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_PASSWORD }}
-          NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
-          NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
-          NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+          MACOS_INSTALLER_IDENTITY: ${{ secrets.MACOS_INSTALLER_IDENTITY }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
         run: |
           set -euo pipefail
+
+          # Every signing/notarization secret is mandatory; list what's missing
+          # and fail before touching the keychain.
+          missing=""
+          for name in MACOS_CERTIFICATE_P12 MACOS_CERTIFICATE_PASSWORD \
+                      MACOS_SIGNING_IDENTITY MACOS_INSTALLER_CERTIFICATE_P12 \
+                      MACOS_INSTALLER_CERTIFICATE_PASSWORD MACOS_INSTALLER_IDENTITY \
+                      MACOS_NOTARY_APPLE_ID MACOS_NOTARY_TEAM_ID MACOS_NOTARY_PASSWORD; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::missing required secrets in the sign_macos environment:$missing"
+            exit 1
+          fi
+
           KEYCHAIN="$RUNNER_TEMP/app-signing.keychain-db"
           CERT="$RUNNER_TEMP/cert.p12"
+          INSTALLER_CERT="$RUNNER_TEMP/installer-cert.p12"
           # Disposable password for the throwaway keychain — never leaves this step.
           KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
 
           echo "$MACOS_CERTIFICATE_P12" | base64 --decode > "$CERT"
+          echo "$MACOS_INSTALLER_CERTIFICATE_P12" | base64 --decode > "$INSTALLER_CERT"
 
           # Create + unlock a temp keychain and add it to the search list
           # (alongside login, where the notary profile below is stored).
@@ -99,16 +118,11 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security import "$CERT" -P "$MACOS_CERTIFICATE_PASSWORD" \
             -k "$KEYCHAIN" -T /usr/bin/codesign
-
-          # The Developer ID Installer certificate (pkg signing) is optional and
-          # lands in the same keychain; productbuild/productsign need explicit
-          # -T entries of their own to reach its private key.
-          if [ -n "${MACOS_INSTALLER_CERTIFICATE_P12:-}" ]; then
-            INSTALLER_CERT="$RUNNER_TEMP/installer-cert.p12"
-            echo "$MACOS_INSTALLER_CERTIFICATE_P12" | base64 --decode > "$INSTALLER_CERT"
-            security import "$INSTALLER_CERT" -P "$MACOS_INSTALLER_CERTIFICATE_PASSWORD" \
-              -k "$KEYCHAIN" -T /usr/bin/productbuild -T /usr/bin/productsign
-          fi
+          # The Developer ID Installer certificate (pkg signing) lands in the
+          # same keychain; productbuild/productsign need explicit -T entries of
+          # their own to reach its private key.
+          security import "$INSTALLER_CERT" -P "$MACOS_INSTALLER_CERTIFICATE_PASSWORD" \
+            -k "$KEYCHAIN" -T /usr/bin/productbuild -T /usr/bin/productsign
 
           # Let codesign/productbuild use the private keys without an
           # interactive prompt. This applies to every key in the keychain, so it
@@ -122,20 +136,21 @@ jobs:
           # --keychain stores it in the default login keychain, which pyappdist
           # reads back (also without --keychain).
           xcrun notarytool store-credentials pyappdist-notary \
-            --apple-id "$NOTARY_APPLE_ID" \
-            --team-id "$NOTARY_TEAM_ID" \
-            --password "$NOTARY_PASSWORD"
+            --apple-id "$MACOS_NOTARY_APPLE_ID" \
+            --team-id "$MACOS_NOTARY_TEAM_ID" \
+            --password "$MACOS_NOTARY_PASSWORD"
+
+          # Hand the identities + notary profile to the build step. The
+          # Application identity signs the .app bundles; the Installer one
+          # signs the .pkg itself — a pkg needs both to be notarized. Exported
+          # here (macOS only) so the build step itself references no secrets.
+          {
+            echo "PYAPPDIST_MACOS_SIGNING_IDENTITY=$MACOS_SIGNING_IDENTITY"
+            echo "PYAPPDIST_MACOS_INSTALLER_IDENTITY=$MACOS_INSTALLER_IDENTITY"
+            echo "PYAPPDIST_MACOS_NOTARY_PROFILE=pyappdist-notary"
+          } >> "$GITHUB_ENV"
 
       - name: Build installer
-        env:
-          # macOS: the Developer ID identities to sign with + the notarytool
-          # profile created in the step above. Ignored on Windows/Linux runners
-          # and when unset (the pkg then falls back to ad-hoc, unnotarized).
-          # The Application identity signs the .app bundles; the Installer one
-          # signs the .pkg itself — a pkg needs both to be notarized.
-          PYAPPDIST_MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
-          PYAPPDIST_MACOS_INSTALLER_IDENTITY: ${{ secrets.MACOS_INSTALLER_IDENTITY }}
-          PYAPPDIST_MACOS_NOTARY_PROFILE: pyappdist-notary
         # >= 0.12 for the .txt pkg license
         run: uvx "pyappdist>=0.12" build ${{ matrix.target }}
 
