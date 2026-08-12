@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Replaces pyappdist's default plist, so keep disable-library-validation:
+         without it the hardened python can't load third-party wheels' .so files. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <!-- numba/llvmlite JIT-compiles with plain mmap(PROT_EXEC); the hardened
+         runtime SIGKILLs that without these two. -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+</dict>
+</plist>

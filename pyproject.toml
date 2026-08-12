@@ -80,6 +80,9 @@ format = "pkg"
 extras = ["gui"]
 # .txt license needs pyappdist >= 0.12; LICENSE.txt is a symlink to LICENSE
 license = "LICENSE.txt"
+# numba/llvmlite JITs at runtime; the hardened runtime kills the process
+# (SIGKILL: Code Signature Invalid) without the JIT entitlements.
+entitlements = "assets/entitlements.plist"
 
 [[tool.pyappdist.targets]]
 name = "linux"
