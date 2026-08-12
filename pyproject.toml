@@ -58,11 +58,24 @@ logo = "assets/kitta.png"
 app-execution-alias = true
 
 [[tool.pyappdist.targets]]
+name = "windows-msi"
+platform = "windows-x86_64"
+format = "msi"
+extras = ["gui"]
+manufacturer = "Atsuo Ishimoto"
+# Must stay stable for the life of the product; auto-write-back would not
+# survive a CI build, so it is fixed here.
+upgrade-code = "2446630D-5CB4-4286-9DDE-B4D732A10EBD"
+add-to-path = true
+license = "assets/LICENSE.rtf"
+
+[[tool.pyappdist.targets]]
 name = "macos"
 platform = "macos-aarch64"
 format = "pkg"
 extras = ["gui"]
-# license = "LICENSE"  # pyappdist 0.11.0 only accepts .rtf here (docs say txt/rtf/html)
+# .txt license needs pyappdist >= 0.12; LICENSE.txt is a symlink to LICENSE
+license = "LICENSE.txt"
 
 [[tool.pyappdist.targets]]
 name = "linux"
