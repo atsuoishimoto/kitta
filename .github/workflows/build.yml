@@ -163,7 +163,7 @@ jobs:
 
       - name: Build installer
         # >= 0.12 for the .txt pkg license
-        run: uvx "pyappdist>=0.12" build ${{ matrix.target }}
+        run: uvx "pyappdist>=0.13" build ${{ matrix.target }}
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
