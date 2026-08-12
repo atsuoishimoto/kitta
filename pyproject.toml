@@ -47,6 +47,8 @@ icon = { windows = "assets/kitta.ico", macos = "assets/kitta.png", linux = "asse
 [[tool.pyappdist.launchers]]
 name = "kitta"
 entry = "kitta.cli.main:main"
+# windows only: linux would create an unwanted .desktop entry for the CLI
+icon = { windows = "assets/kitta.ico" }
 
 [[tool.pyappdist.targets]]
 name = "windows"
