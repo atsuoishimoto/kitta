@@ -34,12 +34,13 @@ dev = [
 
 
 [tool.pyappdist]
-name = "Kitta"
+name = "Kitta Background Remover"
 python = "3.12"
 identifier = "com.github.atsuoishimoto.kitta"
 
 [[tool.pyappdist.launchers]]
-name = "Kitta Background Remover"
+title = "Kitta"
+name = "Kitta"
 entry = "kitta.gui.app:main"
 gui = true
 icon = { windows = "assets/kitta.ico", macos = "assets/kitta.png", linux = "assets/kitta.png" }
@@ -47,10 +48,8 @@ icon = { windows = "assets/kitta.ico", macos = "assets/kitta.png", linux = "asse
 [[tool.pyappdist.launchers]]
 name = "kitta"
 entry = "kitta.cli.main:main"
-# No linux entry: an icon there would create an unwanted .desktop entry for the
-# CLI. macOS has no such coupling — the pkg gives every launcher its own .app in
-# /Applications, so without this the CLI one gets a placeholder icon.
-icon = { windows = "assets/kitta.ico", macos = "assets/kitta.png" }
+app-entry = false
+icon = { windows = "assets/kitta.ico" }
 
 [[tool.pyappdist.targets]]
 name = "windows"
