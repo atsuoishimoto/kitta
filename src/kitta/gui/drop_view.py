@@ -13,12 +13,13 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QPoint, QRect, Qt, QUrl, Signal
+from PySide6.QtCore import QEvent, QPoint, QRect, Qt, QUrl, Signal
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPalette, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QFileDialog,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -29,8 +30,15 @@ from PySide6.QtWidgets import (
 )
 
 import kitta
-from kitta.core import paths
-from kitta.core.models import DEFAULT_PRESET_NAMES, PRESETS, Preset
+from kitta.core import model_store, paths
+from kitta.core.models import (
+    DEFAULT_MODEL_NAMES,
+    MODEL_PRESETS,
+    MODELS,
+    PRESETS,
+    ModelSpec,
+    Preset,
+)
 from kitta.gui.images import load_qimage, qimage_from_data
 
 # ".avif" is decoded through Pillow: Qt has no AVIF plugin (see gui.images)
@@ -145,6 +153,39 @@ def _save_dropped_image(image: QImage, stem: str | None = None) -> str | None:
     if not image.save(str(path), "PNG"):
         return None
     return str(path)
+
+
+def _format_model_size(size: int) -> str:
+    if size >= 1_000_000_000:
+        return f"{size / 1_000_000_000:.2f} GB"
+    return f"{size / 1_000_000:.1f} MB"
+
+
+class ModelCheckBox(QCheckBox):
+    """Checkbox for one model; the tooltip shows file size and cache state.
+
+    The tooltip is rebuilt on every hover so the cache state stays current
+    after a comparison run downloads the model.
+    """
+
+    def __init__(self, spec: ModelSpec, parent=None):
+        label = spec.display_name
+        if "non-commercial" in spec.license_name:
+            label += " (non-commercial)"
+        super().__init__(label, parent)
+        self._spec = spec
+
+    def event(self, event) -> bool:
+        if event.type() == QEvent.Type.ToolTip:
+            status = (
+                self.tr("Downloaded")
+                if model_store.is_available(self._spec)
+                else self.tr("Not downloaded")
+            )
+            size = _format_model_size(self._spec.size)
+            license_line = self.tr("License: {0}").format(self._spec.license_name)
+            self.setToolTip(f"{self._spec.filename}\n{size} — {status}\n{license_line}")
+        return super().event(event)
 
 
 class DropZoneLabel(QLabel):
@@ -293,16 +334,20 @@ class DropView(QWidget):
         self._models_label.setStyleSheet(f"color: {SECONDARY_TEXT_COLOR};")
 
         self._checkboxes: dict[str, QCheckBox] = {}
-        presets_row = QHBoxLayout()
-        presets_row.addStretch()
-        for preset in PRESETS.values():
-            checkbox = QCheckBox(preset.display_name)
+        models_grid = QGridLayout()
+        models_grid.setHorizontalSpacing(24)
+        columns = 5
+        for position, spec in enumerate(MODELS.values()):
+            checkbox = ModelCheckBox(spec)
             font = checkbox.font()
             font.setPointSize(12)
             checkbox.setFont(font)
-            checkbox.setChecked(preset.name in DEFAULT_PRESET_NAMES)
-            self._checkboxes[preset.name] = checkbox
-            presets_row.addWidget(checkbox)
+            checkbox.setChecked(spec.name in DEFAULT_MODEL_NAMES)
+            self._checkboxes[spec.name] = checkbox
+            models_grid.addWidget(checkbox, position // columns, position % columns)
+        presets_row = QHBoxLayout()
+        presets_row.addStretch()
+        presets_row.addLayout(models_grid)
         presets_row.addStretch()
 
         layout = QVBoxLayout(self)
@@ -340,12 +385,17 @@ class DropView(QWidget):
 
     def selected_presets(self) -> list[Preset]:
         return [
-            PRESETS[name] for name, checkbox in self._checkboxes.items() if checkbox.isChecked()
+            MODEL_PRESETS[name]
+            for name, checkbox in self._checkboxes.items()
+            if checkbox.isChecked()
         ]
 
     def set_selected_presets(self, names) -> None:
+        # Settings saved by older versions stored preset names ("fast");
+        # map those to the model the preset resolves to.
+        model_names = {PRESETS[name].model.name if name in PRESETS else name for name in names}
         for name, checkbox in self._checkboxes.items():
-            checkbox.setChecked(name in names)
+            checkbox.setChecked(name in model_names)
 
     def _on_start_clicked(self) -> None:
         if self._selected_path is not None:

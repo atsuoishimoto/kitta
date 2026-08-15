@@ -94,7 +94,7 @@ def test_settings_roundtrip(qtbot):
 
     second = MainWindow()
     qtbot.addWidget(second)
-    assert [preset.name for preset in second.drop_view.selected_presets()] == ["anime"]
+    assert [preset.name for preset in second.drop_view.selected_presets()] == ["isnet-anime"]
     assert second.compare_view.background() is Background.BLACK
     assert second.compare_view.view_mode() is ViewMode.MASK
 

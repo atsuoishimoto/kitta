@@ -35,10 +35,20 @@ source code is available at
 | Model | Preset | License | Source |
 | --- | --- | --- | --- |
 | U²-Net (u2netp) | Fast | Apache-2.0 | <https://github.com/xuebinqin/U-2-Net> |
+| U²-Net (u2net) | — | Apache-2.0 | <https://github.com/xuebinqin/U-2-Net> |
+| U²-Net Human (u2net_human_seg) | — | Apache-2.0 | <https://github.com/xuebinqin/U-2-Net> |
+| U²-Net Cloth (u2net_cloth_seg) | — | MIT | <https://github.com/levindabhi/cloth-segmentation> |
+| Silueta | — | Apache-2.0 | <https://github.com/xuebinqin/U-2-Net> |
 | ISNet General (DIS) | Balanced | Apache-2.0 | <https://github.com/xuebinqin/DIS> |
-| BiRefNet General | High Quality | MIT | <https://github.com/ZhengPeng7/BiRefNet> |
-| BiRefNet Portrait | Portrait | MIT | <https://github.com/ZhengPeng7/BiRefNet> |
 | ISNet Anime | Anime | Apache-2.0 | <https://github.com/SkyTNT/anime-segmentation> |
+| BiRefNet General | High Quality | MIT | <https://github.com/ZhengPeng7/BiRefNet> |
+| BiRefNet Lite | — | MIT | <https://github.com/ZhengPeng7/BiRefNet> |
+| BiRefNet Portrait | Portrait | MIT | <https://github.com/ZhengPeng7/BiRefNet> |
+| BiRefNet DIS | — | MIT | <https://github.com/ZhengPeng7/BiRefNet> |
+| BiRefNet HRSOD | — | MIT | <https://github.com/ZhengPeng7/BiRefNet> |
+| BiRefNet COD | — | MIT | <https://github.com/ZhengPeng7/BiRefNet> |
+| BiRefNet Massive | — | MIT | <https://github.com/ZhengPeng7/BiRefNet> |
+| BRIA RMBG 2.0 | — | BRIA RMBG-2.0 (non-commercial) | <https://huggingface.co/briaai/RMBG-2.0> |
 
 Model files are downloaded on demand from the rembg project's release
 storage (<https://github.com/danielgatis/rembg>). Models are not part of

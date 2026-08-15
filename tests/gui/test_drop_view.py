@@ -2,7 +2,7 @@ import pytest
 from PIL import Image
 from PySide6.QtWidgets import QMessageBox
 
-from kitta.core.models import DEFAULT_PRESET_NAMES, PRESETS
+from kitta.core.models import DEFAULT_MODEL_NAMES, MODELS
 from kitta.gui.drop_view import DropView, is_supported_image
 
 
@@ -22,17 +22,21 @@ def image_file(tmp_path):
 
 def test_default_preset_selection(view):
     selected = {preset.name for preset in view.selected_presets()}
-    assert selected == set(DEFAULT_PRESET_NAMES)
+    assert selected == set(DEFAULT_MODEL_NAMES)
 
 
 def test_set_selected_presets(view):
+    # legacy preset names stored by older versions map to their model
     view.set_selected_presets({"anime"})
-    assert [preset.name for preset in view.selected_presets()] == ["anime"]
+    assert [preset.name for preset in view.selected_presets()] == ["isnet-anime"]
+
+    view.set_selected_presets({"u2net"})
+    assert [preset.name for preset in view.selected_presets()] == ["u2net"]
 
 
-def test_all_presets_offered(view):
-    view.set_selected_presets(PRESETS.keys())
-    assert [preset.name for preset in view.selected_presets()] == list(PRESETS)
+def test_all_models_offered(view):
+    view.set_selected_presets(MODELS.keys())
+    assert [preset.name for preset in view.selected_presets()] == list(MODELS)
 
 
 def test_only_drop_zone_is_click_target(view):

@@ -116,7 +116,7 @@ class MainWindow(QMainWindow):
         presets = self.drop_view.selected_presets()
         if not presets:
             QMessageBox.warning(
-                self, self.tr("Kitta"), self.tr("Select at least one preset first.")
+                self, self.tr("Kitta"), self.tr("Select at least one model first.")
             )
             return
         try:
