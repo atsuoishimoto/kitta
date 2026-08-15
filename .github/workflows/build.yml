@@ -2,22 +2,30 @@ name: Build
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create (e.g. v0.4.0)"
+        required: true
+        type: string
 
 jobs:
-  check-release:
-    # A tag run uploads into an existing release; verify it exists before
-    # spending build minutes. Non-tag runs have nothing to check, so the
-    # step is skipped and the job succeeds.
+  check-tag:
+    # The tag must not exist yet: the release job creates it after a
+    # successful build. Checked up front to avoid wasting build minutes.
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
     steps:
-      - name: Check release exists
-        if: startsWith(github.ref, 'refs/tags/')
-        run: gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}"
+      - name: Fail if tag already exists
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::tag '$TAG' already exists"
+            exit 1
+          fi
 
   build:
-    needs: check-release
+    needs: check-tag
     strategy:
       # A failing cell (e.g. macOS missing its signing secrets) must not cancel
       # the other builds.
@@ -173,17 +181,26 @@ jobs:
           retention-days: 1
 
   release:
-    if: startsWith(github.ref, 'refs/tags/')
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: dist
           merge-multiple: true
-      - name: Upload assets (overwrite)
-        run: gh release upload "${{ github.ref_name }}" dist/* --clobber --repo "${{ github.repository }}"
+      - name: Create tag
+        # 422s if the tag appeared since the pre-check, failing the job
+        # before a release is created.
+        run: |
+          gh api "repos/${{ github.repository }}/git/refs" \
+            -f ref="refs/tags/$TAG" -f sha="${{ github.sha }}"
+      - name: Create release with installers
+        run: |
+          gh release create "$TAG" dist/* \
+            --title "$TAG" --generate-notes \
+            --repo "${{ github.repository }}"

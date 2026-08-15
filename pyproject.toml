@@ -40,7 +40,7 @@ identifier = "com.github.atsuoishimoto.kitta"
 
 [[tool.pyappdist.launchers]]
 title = "Kitta"
-name = "Kitta"
+name = "Kitta-gui"
 entry = "kitta.gui.app:main"
 gui = true
 icon = { windows = "assets/kitta.ico", macos = "assets/kitta.png", linux = "assets/kitta.png" }
