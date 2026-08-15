@@ -57,8 +57,10 @@ def remove_background(image: Image.Image, preset: Preset) -> RemovalResult:
     use model_store.ensure / compare beforehand).
     """
     model_store.ensure(preset.model)
-    session = _get_session(preset.model.name)
-    from rembg import remove
+    paths.configure_rembg_model_dir()
+    from rembg import new_session, remove
+
+    session = new_session(preset.model.name)
 
     work = image
     if max(image.size) > MAX_INFERENCE_EDGE:

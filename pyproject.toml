@@ -10,7 +10,7 @@ dependencies = [
     # 11.3 is the first release whose wheels can decode AVIF (Qt cannot)
     "pillow>=11.3",
     "rembg-directml[cpu,cli]>=1.1.0 ; sys_platform != 'win32'",
-    "rembg-directml[dml,cli]>=1.1.0 ; sys_platform == 'win32'",
+    "rembg-directml[cpu,cli]>=1.1.0 ; sys_platform == 'win32'",
     "tomli-w>=1.0",
 ]
 
