@@ -115,9 +115,7 @@ class MainWindow(QMainWindow):
             return
         presets = self.drop_view.selected_presets()
         if not presets:
-            QMessageBox.warning(
-                self, self.tr("Kitta"), self.tr("Select at least one model first.")
-            )
+            QMessageBox.warning(self, self.tr("Kitta"), self.tr("Select at least one model first."))
             return
         try:
             image = load_image(path)
