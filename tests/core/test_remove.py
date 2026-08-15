@@ -33,10 +33,8 @@ def test_large_image_keeps_full_resolution(sample_image):
 
 
 @pytest.mark.inference
-def test_sessions_are_cached(sample_image):
+def test_sessions_are_not_cached(sample_image):
     from kitta.core import remove
 
     remove.remove_background(sample_image, PRESETS["fast"])
-    session = remove._sessions["u2netp"]
-    remove.remove_background(sample_image, PRESETS["fast"])
-    assert remove._sessions["u2netp"] is session
+    assert remove._sessions == {}  # cache is kept in code but unused
